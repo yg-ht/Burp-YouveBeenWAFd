@@ -34,7 +34,10 @@ class AssessmentStore(object):
                  "<p>Origin: %s<br>Confidence: %.0f%% (threshold %.0f%%)</p>" %
                  (origin, score * 100, self.engine.threshold * 100)]
         if product_names:
-            lines.append("<p>Suspected products: %s</p>" % ", ".join(product_names))
+            lines.append("<p>Edge/provider signals: %s</p>" % ", ".join(product_names))
+        actions = sorted(set(item.action for item in assessment.evidence if item.action))
+        if actions:
+            lines.append("<p>Observed security actions: %s</p>" % ", ".join(actions))
         if assessment.evidence:
             lines.append("<p>Detections:</p><ul>%s</ul>" % "".join(
                 "<li>%s: %s</li>" % (item.rule_id, item.detail)

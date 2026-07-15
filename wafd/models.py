@@ -29,6 +29,7 @@ if dataclass:
         detail: str
         product: str = ""
         source: str = "passive"
+        action: str = ""
 
     @dataclass
     class OriginAssessment:
@@ -48,9 +49,9 @@ else:
             self.enabled, self.active = bool(enabled), bool(active)
 
     class Evidence(object):
-        def __init__(self, rule_id, origin, detail, product="", source="passive"):
+        def __init__(self, rule_id, origin, detail, product="", source="passive", action=""):
             self.rule_id, self.origin, self.detail = rule_id, origin, detail
-            self.product, self.source = product, source
+            self.product, self.source, self.action = product, source, action
 
     class OriginAssessment(object):
         def __init__(self, origin, evidence=None, representative_message=None):

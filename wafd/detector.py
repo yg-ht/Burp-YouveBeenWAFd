@@ -2,6 +2,7 @@
 
 from .models import Evidence
 from difflib import SequenceMatcher
+import re
 
 
 class ResponseDetector(object):
@@ -66,7 +67,25 @@ class ResponseDetector(object):
                 challenge_status = status in [int(value) for value in matcher.get("statuses", [])]
                 matched = challenge_body or challenge_status
                 detail = "probe triggered a challenge or verification response"
+            elif kind == "strong_header":
+                expected = str(matcher.get("contains", "")).lower()
+                value = headers.get(str(matcher.get("name", "")).lower(), "")
+                matched = expected in value.lower()
+                detail = "%s: %s" % (matcher.get("name"), value)
+            elif kind == "header_body":
+                value = headers.get(str(matcher.get("header", "")).lower(), "")
+                header_match = str(matcher.get("header_contains", "")).lower() in value.lower()
+                body_match = all(str(term).lower() in body for term in matcher.get("body_terms", []))
+                regex = matcher.get("body_regex")
+                regex_match = bool(re.search(regex, body, re.I)) if regex else True
+                matched = header_match and body_match and regex_match
+                detail = "vendor response marker and behavioural block content matched"
+            elif kind == "body_regex":
+                matched = bool(re.search(str(matcher.get("pattern", "")), body, re.I))
+                detail = "response body matched a vendor block template"
             if matched:
                 product = next((tag for tag in rule.tags if tag != "generic" and tag != "product"), "")
-                found.append(Evidence(rule.rule_id, origin, detail, product, source))
+                action = next((tag for tag in rule.tags if tag in
+                               ("block", "challenge", "captcha", "rate_limit", "reset")), "")
+                found.append(Evidence(rule.rule_id, origin, detail, product, source, action))
         return found

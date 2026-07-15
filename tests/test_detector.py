@@ -41,6 +41,25 @@ class DetectorTests(unittest.TestCase):
             "active", {"status": 200, "headers": {}, "body": "normal application response with content"})
         self.assertEqual(evidence[0].rule_id, "body")
 
+    def test_cloudflare_challenge_header_is_high_confidence_action_evidence(self):
+        catalogue = RuleCatalogue.from_json('{"rules": ['
+            '{"id":"cf","name":"CF challenge","evidence_group":"action","weight":100,'
+            '"tags":["cloudflare","product","challenge"],'
+            '"matcher":{"kind":"strong_header","name":"cf-mitigated","contains":"challenge"}}]}')
+        evidence = ResponseDetector(catalogue).detect(
+            "https://x", {"status": 403, "headers": {"cf-mitigated": "challenge"}, "body": "challenge"})
+        self.assertEqual(evidence[0].product, "cloudflare")
+        self.assertEqual(evidence[0].action, "challenge")
+
+    def test_azure_requires_edge_header_and_block_body(self):
+        catalogue = RuleCatalogue.from_json('{"rules": ['
+            '{"id":"azure","name":"Azure","evidence_group":"action","weight":85,'
+            '"tags":["azure-waf","product","block"],"matcher":{"kind":"header_body",'
+            '"header":"x-azure-ref","body_terms":["the request is blocked"]}}]}')
+        detector = ResponseDetector(catalogue)
+        response = {"status": 403, "headers": {"x-azure-ref": "ref"}, "body": "The request is blocked."}
+        self.assertEqual(detector.detect("https://x", response)[0].action, "block")
+
 
 if __name__ == "__main__":
     unittest.main()
