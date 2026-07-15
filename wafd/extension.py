@@ -178,6 +178,14 @@ class WafExtension(object):
                 request = insertionPoint.buildRequest(payload.encode("utf-8"))
                 response = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), request)
                 if response is None or response.getResponse() is None:
+                    # A reset/no-response outcome is itself behavioural
+                    # evidence, but it must not be treated as HTTP status 0.
+                    origin = self._origin(request_info.getUrl())
+                    reset = {"status": 0, "headers": {}, "body": "",
+                             "connection_state": "no-response"}
+                    evidence = self.detector.detect(origin, reset, "active")
+                    self.assessments.observe(origin, evidence, baseRequestResponse)
+                    self._publish_issue(origin)
                     continue
                 response_info = self.helpers.analyzeResponse(response.getResponse())
                 normalised = self._normalise_response(response.getResponse(), response_info)
