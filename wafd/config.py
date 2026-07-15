@@ -9,11 +9,14 @@ class Configuration(object):
     VERSION = 1
 
     def __init__(self, threshold=0.60, in_scope_only=True, max_probes=3,
-                 enabled=True):
+                 enabled=True, non_get_target="root"):
         self.threshold = self._threshold(threshold)
         self.in_scope_only = bool(in_scope_only)
         self.max_probes = max(0, min(int(max_probes), 20))
         self.enabled = bool(enabled)
+        if non_get_target not in ("root", "selected"):
+            raise ValueError("non_get_target must be root or selected")
+        self.non_get_target = non_get_target
 
     @staticmethod
     def _threshold(value):
@@ -25,7 +28,7 @@ class Configuration(object):
     def to_json(self):
         return json.dumps({"schema_version": self.VERSION, "threshold": self.threshold,
                            "in_scope_only": self.in_scope_only, "max_probes": self.max_probes,
-                           "enabled": self.enabled}, sort_keys=True)
+                           "enabled": self.enabled, "non_get_target": self.non_get_target}, sort_keys=True)
 
     @classmethod
     def from_json(cls, text):
@@ -33,4 +36,5 @@ class Configuration(object):
         if not isinstance(value, dict) or value.get("schema_version") != cls.VERSION:
             raise ValueError("unsupported configuration schema")
         return cls(value.get("threshold", .60), value.get("in_scope_only", True),
-                   value.get("max_probes", 3), value.get("enabled", True))
+                   value.get("max_probes", 3), value.get("enabled", True),
+                   value.get("non_get_target", "root"))
