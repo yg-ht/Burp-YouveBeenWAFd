@@ -15,6 +15,18 @@ INTERFACE_NAMES = (
     "ITab",
 )
 
+INTERFACE_METHODS = {
+    "IBurpExtender": ("registerExtenderCallbacks",),
+    "IHttpListener": ("processHttpMessage",),
+    "IScannerCheck": (
+        "doPassiveScan",
+        "doActiveScan",
+        "consolidateDuplicateIssues",
+    ),
+    "IContextMenuFactory": ("createMenuItems",),
+    "ITab": ("getTabCaption", "getUiComponent"),
+}
+
 
 class BurpEntryPointTests(unittest.TestCase):
     """Verify that Burp receives an object implementing every registered API."""
@@ -44,9 +56,17 @@ class BurpEntryPointTests(unittest.TestCase):
                     "BurpExtender does not implement %s" % interface_name,
                 )
 
-            # Keep Burp's required bootstrap method explicit on the exported
-            # class rather than relying on discovery through a Python base.
-            self.assertIn("registerExtenderCallbacks", extender_class.__dict__)
+            # Jython's Java proxy does not satisfy abstract interface methods
+            # from a later Python mixin.  Every method must therefore be
+            # declared directly on the class exported to Burp.
+            for interface_name, method_names in INTERFACE_METHODS.items():
+                for method_name in method_names:
+                    self.assertIn(
+                        method_name,
+                        extender_class.__dict__,
+                        "%s method %s is inherited rather than explicit"
+                        % (interface_name, method_name),
+                    )
         finally:
             sys.modules.pop("BurpExtender", None)
 

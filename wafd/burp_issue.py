@@ -1,7 +1,13 @@
 """Legacy Burp IScanIssue-compatible value object."""
 
+try:
+    from burp import IScanIssue
+except ImportError:  # CPython test environment has no Burp Java API.
+    class IScanIssue(object):
+        """Fallback base allowing the dependency-free core tests to import."""
 
-class WafScanIssue(object):
+
+class WafScanIssue(IScanIssue):
     """Expose one current assessment through Burp's legacy issue interface."""
 
     def __init__(self, url, http_service, detail, remediation, severity,
