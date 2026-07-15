@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {"id": "generic.block-status", "name": "WAF-like blocked response status", "evidence_group": "status", "weight": 18, "tags": ["generic"], "matcher": {"kind": "status", "values": [403, 406, 429, 503]}, "active": true},
+    {"id": "generic.challenge-body", "name": "WAF challenge or block page", "evidence_group": "body", "weight": 18, "tags": ["generic"], "matcher": {"kind": "body_terms", "values": ["access denied", "request blocked", "captcha", "security challenge"]}},
+    {"id": "cloudflare.header", "name": "Cloudflare response marker", "evidence_group": "vendor-header", "weight": 30, "tags": ["cloudflare", "product"], "matcher": {"kind": "header", "name": "server", "contains": "cloudflare"}},
+    {"id": "akamai.header", "name": "Akamai response marker", "evidence_group": "vendor-header", "weight": 30, "tags": ["akamai", "product"], "matcher": {"kind": "header", "name": "x-akamai-transformed", "contains": ""}},
+    {"id": "imperva.header", "name": "Imperva response marker", "evidence_group": "vendor-header", "weight": 30, "tags": ["imperva", "product"], "matcher": {"kind": "header", "name": "x-iinfo", "contains": ""}},
+    {"id": "sucuri.header", "name": "Sucuri response marker", "evidence_group": "vendor-header", "weight": 30, "tags": ["sucuri", "product"], "matcher": {"kind": "header", "name": "x-sucuri-id", "contains": ""}},
+    {"id": "aws.header", "name": "AWS WAF response marker", "evidence_group": "vendor-header", "weight": 20, "tags": ["aws-waf", "product"], "matcher": {"kind": "header", "name": "x-amzn-requestid", "contains": ""}},
+    {"id": "azure.header", "name": "Azure WAF response marker", "evidence_group": "vendor-header", "weight": 20, "tags": ["azure-waf", "product"], "matcher": {"kind": "header", "name": "x-azure-ref", "contains": ""}},
+    {"id": "gcp.header", "name": "Google Cloud Armor response marker", "evidence_group": "vendor-header", "weight": 20, "tags": ["google-cloud-armor", "product"], "matcher": {"kind": "header", "name": "x-cloud-trace-context", "contains": ""}},
+    {"id": "fastly.header", "name": "Fastly response marker", "evidence_group": "vendor-header", "weight": 20, "tags": ["fastly", "product"], "matcher": {"kind": "header", "name": "x-served-by", "contains": ""}},
+    {"id": "f5.cookie", "name": "F5 BIG-IP response cookie", "evidence_group": "vendor-cookie", "weight": 30, "tags": ["f5", "product"], "matcher": {"kind": "header", "name": "set-cookie", "contains": "bigipserver"}},
+    {"id": "fortiweb.header", "name": "FortiWeb response marker", "evidence_group": "vendor-header", "weight": 25, "tags": ["fortiweb", "product"], "matcher": {"kind": "header", "name": "server", "contains": "fortiweb"}},
+    {"id": "barracuda.header", "name": "Barracuda response marker", "evidence_group": "vendor-header", "weight": 25, "tags": ["barracuda", "product"], "matcher": {"kind": "header", "name": "server", "contains": "barracuda"}},
+    {"id": "radware.header", "name": "Radware response marker", "evidence_group": "vendor-header", "weight": 25, "tags": ["radware", "product"], "matcher": {"kind": "header", "name": "x-sl-compstate", "contains": ""}},
+    {"id": "modsecurity.body", "name": "ModSecurity block page", "evidence_group": "body", "weight": 20, "tags": ["modsecurity", "product"], "matcher": {"kind": "body_terms", "values": ["mod_security", "modsecurity"]}},
+    {"id": "generic.probe-differential", "name": "Probe response differs from baseline", "evidence_group": "active-differential", "weight": 24, "tags": ["generic"], "matcher": {"kind": "active_differential"}, "active": true}
+  ]
+}

@@ -3,3 +3,7 @@
 
 # PyCharm stores local project and workspace metadata in this directory.
 .idea/
+
+# Python bytecode generated during local testing.
+__pycache__/
+*.py[cod]
