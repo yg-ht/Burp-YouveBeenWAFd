@@ -26,6 +26,19 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Configuration(non_get_target="arbitrary")
 
+    def test_size_thresholds_round_trip_and_are_bounded(self):
+        original = Configuration(body_test_threshold=4096, header_test_threshold=2048,
+                                 header_count_test_threshold=32, inspection_boundary=3072,
+                                 size_hard_max=16384)
+        restored = Configuration.from_json(original.to_json())
+        self.assertEqual(restored.body_test_threshold, 4096)
+        self.assertEqual(restored.header_count_test_threshold, 32)
+        self.assertEqual(restored.inspection_boundary, 3072)
+        with self.assertRaises(ValueError):
+            Configuration(body_test_threshold=20000, size_hard_max=10000)
+        with self.assertRaises(ValueError):
+            Configuration(inspection_boundary=10000, size_hard_max=10000)
+
 
 if __name__ == "__main__":
     unittest.main()

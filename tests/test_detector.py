@@ -71,6 +71,15 @@ class DetectorTests(unittest.TestCase):
         ids = [item.rule_id for item in ResponseDetector(catalogue).detect("https://x", response, baseline=baseline)]
         self.assertEqual(ids, ["cookie", "hash"])
 
+    def test_cookie_value_rotation_is_detected_without_cookie_values(self):
+        catalogue = RuleCatalogue.from_json('{"rules": ['
+            '{"id":"cookie-value","name":"Cookie value","evidence_group":"cookie-value",'
+            '"weight":10,"matcher":{"kind":"cookie_value_delta"}}]}')
+        baseline = {"status": 200, "headers": {}, "cookie_fingerprints": {"session": "a"}}
+        response = {"status": 200, "headers": {}, "cookie_fingerprints": {"session": "b"}}
+        evidence = ResponseDetector(catalogue).detect("https://x", response, baseline=baseline)
+        self.assertEqual(evidence[0].detail, "probe rotated response cookies: session")
+
     def test_crs_identifier_and_concealed_status_are_recognised(self):
         catalogue = RuleCatalogue.from_json('{"rules": ['
             '{"id":"crs","name":"CRS","evidence_group":"crs","weight":100,'
@@ -92,6 +101,28 @@ class DetectorTests(unittest.TestCase):
         evidence = detector.detect("https://x", {"status": 403, "headers": {}, "body": "same"},
                                    baseline={"status": 403, "headers": {}, "body": "same"})
         self.assertEqual(evidence, [])
+
+    def test_zero_weight_active_outcome_records_probe_identity(self):
+        catalogue = RuleCatalogue.from_json('{"rules": [{"id":"outcome","name":"Outcome",'
+            '"evidence_group":"audit","weight":0,"matcher":{"kind":"active_outcome"}}]}')
+        evidence = ResponseDetector(catalogue).detect(
+            "https://x", {"status": 403, "headers": {}, "body": "blocked"},
+            "active", {"status": 200, "headers": {}, "body": "ordinary"},
+            "matrix.sqli.boolean.query", "malformed-request")
+        self.assertEqual(evidence[0].detail, "control HTTP 200; probe HTTP 403")
+        self.assertEqual(evidence[0].characteristic, "matrix.sqli.boolean.query")
+        self.assertEqual(evidence[0].classification, "malformed-request")
+
+    def test_request_policy_transition_covers_size_and_header_failures(self):
+        catalogue = RuleCatalogue.from_json('{"rules": [{"id":"policy","name":"Policy",'
+            '"evidence_group":"policy","weight":16,"matcher":{"kind":"status_transition",'
+            '"blocked":[400,403,413,431,502]}}]}')
+        detector = ResponseDetector(catalogue)
+        for status in (400, 403, 413, 431, 502):
+            evidence = detector.detect(
+                "https://x", {"status": status, "headers": {}, "body": "rejected"},
+                "active", {"status": 200, "headers": {}, "body": "ordinary"})
+            self.assertEqual(evidence[0].rule_id, "policy")
 
 
 if __name__ == "__main__":

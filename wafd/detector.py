@@ -11,7 +11,8 @@ class ResponseDetector(object):
     def __init__(self, catalogue):
         self.catalogue = catalogue
 
-    def detect(self, origin, response, source="passive", baseline=None):
+    def detect(self, origin, response, source="passive", baseline=None,
+               characteristic="", classification=""):
         """Return distinct evidence for one response.
 
         ``response`` has ``status``, ``headers`` and ``body`` fields. Bodies
@@ -74,6 +75,13 @@ class ResponseDetector(object):
                 added = set(response.get("cookies", [])) - set(baseline.get("cookies", []))
                 matched = len(added) >= int(matcher.get("minimum", 1))
                 detail = "probe added response cookies: %s" % ", ".join(sorted(added))
+            elif kind == "cookie_value_delta" and baseline is not None:
+                before_cookies = baseline.get("cookie_fingerprints", {})
+                after_cookies = response.get("cookie_fingerprints", {})
+                changed = sorted(name for name in set(before_cookies).intersection(after_cookies)
+                                 if before_cookies[name] != after_cookies[name])
+                matched = len(changed) >= int(matcher.get("minimum", 1))
+                detail = "probe rotated response cookies: %s" % ", ".join(changed)
             elif kind == "http_version_change" and baseline is not None:
                 matched = (baseline.get("http_version") and response.get("http_version") and
                            baseline.get("http_version") != response.get("http_version"))
@@ -109,6 +117,10 @@ class ResponseDetector(object):
             elif kind == "body_regex":
                 matched = bool(re.search(str(matcher.get("pattern", "")), body, re.I | re.S))
                 detail = "response body matched a vendor block template"
+            elif kind == "active_outcome" and baseline is not None:
+                before = int(baseline.get("status", 0) or 0)
+                matched = True
+                detail = "control HTTP %d; probe HTTP %d" % (before, status)
             if matched:
                 # Tags preserve separate product and action conclusions. Edge
                 # attribution therefore does not automatically imply that a
@@ -116,5 +128,6 @@ class ResponseDetector(object):
                 product = next((tag for tag in rule.tags if tag != "generic" and tag != "product"), "")
                 action = next((tag for tag in rule.tags if tag in
                                ("block", "challenge", "captcha", "rate_limit", "reset")), "")
-                found.append(Evidence(rule.rule_id, origin, detail, product, source, action))
+                found.append(Evidence(rule.rule_id, origin, detail, product, source, action,
+                                      characteristic, classification))
         return found

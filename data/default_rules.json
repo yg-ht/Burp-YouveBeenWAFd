@@ -2,6 +2,18 @@
   "schema_version": 1,
   "rules": [
     {
+      "id": "generic.probe-outcome",
+      "name": "Active probe outcome record",
+      "evidence_group": "audit-active-outcome",
+      "weight": 0,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "active_outcome"
+      }
+    },
+    {
       "id": "generic.block-status",
       "name": "Blocked status (weak standalone signal)",
       "evidence_group": "status",
@@ -105,6 +117,25 @@
       }
     },
     {
+      "id": "generic.request-policy-transition",
+      "name": "Probe-triggered request-policy response",
+      "evidence_group": "behaviour-request-policy",
+      "weight": 16,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "status_transition",
+        "blocked": [
+          400,
+          403,
+          413,
+          431,
+          502
+        ]
+      }
+    },
+    {
       "id": "generic.challenge-transition",
       "name": "Probe-triggered challenge transition",
       "evidence_group": "behaviour-challenge",
@@ -179,6 +210,19 @@
       }
     },
     {
+      "id": "generic.cookie-value-differential",
+      "name": "Probe-rotated response cookie value",
+      "evidence_group": "behaviour-cookie-values",
+      "weight": 12,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "cookie_value_delta",
+        "minimum": 1
+      }
+    },
+    {
       "id": "generic.protocol-differential",
       "name": "Probe HTTP-version transition",
       "evidence_group": "behaviour-protocol",
@@ -203,7 +247,9 @@
         "kind": "connection_state",
         "values": [
           "reset",
-          "no-response"
+          "no-response",
+          "timeout",
+          "network-error"
         ]
       }
     },

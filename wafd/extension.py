@@ -3,12 +3,14 @@
 import json
 import os
 import re
+import time
 
 from .assessment import AssessmentStore
 from .config import Configuration
 from .detector import ResponseDetector
 from .fingerprint import build_fingerprint
 from .probes import ProbePlanner
+from .request_builder import ProbeRequestBuilder
 from .rules import RuleCatalogue
 
 
@@ -22,6 +24,7 @@ class WafExtension(object):
         self.detector = None
         self.assessments = None
         self.probes = None
+        self.request_builder = ProbeRequestBuilder()
         self.configuration = Configuration()
         self._panel = None
 
@@ -141,22 +144,28 @@ class WafExtension(object):
     def _is_extension_traffic(self, tool_flag):
         return getattr(self.callbacks, "TOOL_EXTENDER", object()) == tool_flag
 
-    def _normalise_response(self, raw_response, response_info):
+    def _normalise_response(self, raw_response, response_info, elapsed_ms=None):
         # Burp exposes headers as name/value objects. Normalising names here
         # gives the core detector one predictable, case-insensitive contract.
         headers = {}
         for header in response_info.getHeaders():
             name = str(header.getName()).lower()
-            headers[name] = str(header.getValue())
+            value = str(header.getValue())
+            # Preserve repeated response headers in one deterministic value;
+            # Set-Cookie parsing needs every occurrence to observe mitigation
+            # and session rotation without retaining cookie secrets.
+            headers[name] = (headers[name] + "\n" + value) if name in headers else value
         body = raw_response[response_info.getBodyOffset():]
         if not isinstance(body, str):
             body = body.decode("utf-8", "replace")
         first_line = raw_response.splitlines()[0] if raw_response.splitlines() else ""
+        if hasattr(first_line, "decode"):
+            first_line = first_line.decode("iso-8859-1", "replace")
         # Preserve HTTP/1.0, HTTP/1.1 and HTTP/2 for protocol-differential
         # rules without relying on Burp-specific response objects downstream.
         match = re.match(r"HTTP/(\d(?:\.\d)?)", str(first_line))
         return build_fingerprint(response_info.getStatusCode(), headers, body[:1024 * 1024],
-                                 match.group(1) if match else "")
+                                 match.group(1) if match else "", elapsed_ms=elapsed_ms)
 
     @staticmethod
     def _origin(url):
@@ -187,7 +196,7 @@ class WafExtension(object):
         return None
 
     def doActiveScan(self, baseRequestResponse, insertionPoint):
-        """Run a capped safe probe set for Scanner insertion points."""
+        """Run enabled probe profiles for a requested Scanner insertion point."""
         try:
             request_info = self.helpers.analyzeRequest(baseRequestResponse)
             name = insertionPoint.getInsertionPointName()
@@ -196,49 +205,136 @@ class WafExtension(object):
             root_mode = (method not in ("GET", "HEAD", "OPTIONS") and
                          self.configuration.non_get_target == "root")
             control = baseRequestResponse
-            root_headers = list(request_info.getHeaders())
+            base_headers = list(request_info.getHeaders())
+            root_headers = list(base_headers)
             if root_mode:
                 # By default, non-GET probes target / rather than replaying a
                 # selected application action. The method is retained, while
                 # the body is replaced with the configured probe marker.
                 root_headers[0] = "%s / HTTP/1.1" % method
                 control_request = self.helpers.buildHttpMessage(root_headers, "")
-                control = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), control_request)
+                control, unused_state, unused_elapsed = self._send_active_request(
+                    baseRequestResponse.getHttpService(), control_request)
                 if control is None or control.getResponse() is None:
                     # Falling back preserves scan availability, but means the
                     # selected response is the control for this comparison.
                     control = baseRequestResponse
             results = []
+            specialised_controls = {}
+            observed = False
+            origin = self._origin(request_info.getUrl())
             for probe in probe_entries:
-                if root_mode:
-                    request = self.helpers.buildHttpMessage(root_headers, probe.value.encode("utf-8"))
-                else:
-                    request = insertionPoint.buildRequest(probe.value.encode("utf-8"))
+                try:
+                    if probe.profile.get("placement"):
+                        # Specialist profiles construct both control and probe
+                        # in the same wire format, changing only the logical
+                        # value or an explicitly declared boundary offset.
+                        original_body = baseRequestResponse.getRequest()[request_info.getBodyOffset():]
+                        built = self.request_builder.build(
+                            base_headers, original_body, probe.profile, probe.value,
+                            self.configuration.non_get_target == "root",
+                            self._probe_limits())
+                        request = self.helpers.buildHttpMessage(
+                            built.headers, self._request_body_bytes(built.body))
+                        if probe.control_required:
+                            control = specialised_controls.get(probe.probe_id)
+                            if control is None:
+                                control_value = probe.profile.get("control_value", "ordinary")
+                                control_profile = dict(probe.profile)
+                                control_profile.update(probe.profile.get("control_profile", {}))
+                                built_control = self.request_builder.build(
+                                    base_headers, original_body, control_profile, control_value,
+                                    self.configuration.non_get_target == "root",
+                                    self._probe_limits())
+                                control_request = self.helpers.buildHttpMessage(
+                                    built_control.headers,
+                                    self._request_body_bytes(built_control.body))
+                                control_request = self._apply_probe_profile(
+                                    control_request, control_profile)
+                                control, unused_state, unused_elapsed = self._send_active_request(
+                                    baseRequestResponse.getHttpService(), control_request)
+                                if control is None or control.getResponse() is None:
+                                    control = baseRequestResponse
+                                specialised_controls[probe.probe_id] = control
+                        else:
+                            control = baseRequestResponse
+                    elif root_mode:
+                        request = self.helpers.buildHttpMessage(
+                            root_headers, probe.value.encode("utf-8"))
+                    else:
+                        request = insertionPoint.buildRequest(probe.value.encode("utf-8"))
+                except (ValueError, TypeError) as error:
+                    # One malformed local profile must not cancel every other
+                    # explicitly enabled probe in the active operation.
+                    self.callbacks.printError(
+                        "WAF Detector skipped probe %s: %s" % (probe.probe_id, error))
+                    continue
                 request = self._apply_probe_profile(request, probe.profile)
-                response = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), request)
+                response, connection_state, elapsed_ms = self._send_active_request(
+                    baseRequestResponse.getHttpService(), request)
                 if response is None or response.getResponse() is None:
                     # A reset/no-response outcome is itself behavioural
                     # evidence, but it must not be treated as HTTP status 0.
-                    origin = self._origin(request_info.getUrl())
                     reset = {"status": 0, "headers": {}, "body": "",
-                             "connection_state": "no-response"}
-                    evidence = self.detector.detect(origin, reset, "active")
+                             "connection_state": connection_state,
+                             "elapsed_ms": elapsed_ms}
+                    evidence = self.detector.detect(
+                        origin, reset, "active", characteristic=probe.probe_id,
+                        classification=probe.profile.get("classification", ""))
                     self.assessments.observe(origin, evidence, baseRequestResponse)
-                    self._publish_issue(origin)
+                    observed = True
                     continue
                 response_info = self.helpers.analyzeResponse(response.getResponse())
-                normalised = self._normalise_response(response.getResponse(), response_info)
+                normalised = self._normalise_response(
+                    response.getResponse(), response_info, elapsed_ms)
                 baseline_info = self.helpers.analyzeResponse(control.getResponse())
                 baseline = self._normalise_response(control.getResponse(), baseline_info)
-                origin = self._origin(request_info.getUrl())
-                evidence = self.detector.detect(origin, normalised, "active", baseline)
+                evidence = self.detector.detect(
+                    origin, normalised, "active", baseline, probe.probe_id,
+                    probe.profile.get("classification", ""))
                 self.assessments.observe(origin, evidence, response)
-                self._publish_issue(origin)
+                observed = True
                 results.append(response)
+            if observed:
+                # Publish once after the batch so a large matrix does not ask
+                # Burp to replace the same issue hundreds of times.
+                self._publish_issue(origin)
             return []
         except Exception as error:
             self.callbacks.printError("WAF Detector active probe failed: %s" % error)
             return []
+
+    @staticmethod
+    def _request_body_bytes(body):
+        """Encode constructed text while preserving Burp/Java byte arrays."""
+        return body.encode("utf-8") if hasattr(body, "encode") else body
+
+    def _send_active_request(self, service, request):
+        """Return ``(message, connection_state, elapsed_ms)`` for one request."""
+        started = time.time()
+        try:
+            message = self.callbacks.makeHttpRequest(service, request)
+            elapsed_ms = int((time.time() - started) * 1000)
+            state = "complete" if message is not None and message.getResponse() is not None else "no-response"
+            return message, state, elapsed_ms
+        except Exception as error:
+            elapsed_ms = int((time.time() - started) * 1000)
+            text = str(error).lower()
+            state = "timeout" if "timed out" in text or "timeout" in text else (
+                "reset" if "reset" in text else "network-error")
+            self.callbacks.printError("WAF Detector active request ended with %s: %s" %
+                                      (state, error))
+            return None, state, elapsed_ms
+
+    def _probe_limits(self):
+        """Expose only bounded size settings to the request builder."""
+        return {
+            "body_test_threshold": self.configuration.body_test_threshold,
+            "header_test_threshold": self.configuration.header_test_threshold,
+            "header_count_test_threshold": self.configuration.header_count_test_threshold,
+            "inspection_boundary": self.configuration.inspection_boundary,
+            "size_hard_max": self.configuration.size_hard_max,
+        }
 
     def _apply_probe_profile(self, request, profile):
         """Apply only explicitly declared, non-authentication profile headers."""

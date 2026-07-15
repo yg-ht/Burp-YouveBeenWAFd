@@ -32,6 +32,8 @@ if dataclass:
         product: str = ""
         source: str = "passive"
         action: str = ""
+        characteristic: str = ""
+        classification: str = ""
 
     @dataclass
     class OriginAssessment:
@@ -55,9 +57,12 @@ else:
     class Evidence(object):
         """Jython-compatible representation of one observation."""
 
-        def __init__(self, rule_id, origin, detail, product="", source="passive", action=""):
+        def __init__(self, rule_id, origin, detail, product="", source="passive", action="",
+                     characteristic="", classification=""):
             self.rule_id, self.origin, self.detail = rule_id, origin, detail
             self.product, self.source, self.action = product, source, action
+            self.characteristic = characteristic
+            self.classification = classification
 
     class OriginAssessment(object):
         """Jython-compatible assessment container for one origin."""
