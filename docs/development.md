@@ -128,8 +128,8 @@ Before release, manually verify:
 1. Jython loads the entry point and all Python modules.
 2. Settings, rule overrides, and probe overrides persist across reload.
 3. All three UI tabs render and remain responsive with 213 probe controls;
-   settings and checkbox rows retain natural font-relative heights and tab
-   headers remain within their documented width bounds.
+   settings and checkbox rows retain natural font-relative heights, and tab
+   contents remain left aligned within their documented 960-pixel width cap.
 4. Rule/provider and probe/function groups start collapsed; expand/collapse-all
    controls, filter-driven expansion, and hiding empty groups behave correctly.
 5. Rule and probe filters match documented metadata, update matched counts,

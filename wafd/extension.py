@@ -127,20 +127,12 @@ class WafExtension(object):
         raise ValueError("unsupported non-GET target selection")
 
     @staticmethod
-    def _tab_header_width(preferred_width):
-        """Pad a tab title while bounding narrow and wide look-and-feels."""
-        return max(90, min(int(preferred_width) + 24, 180))
-
-    @staticmethod
-    def _tab_layout_properties():
-        """Return FlatLaf properties which prevent full-width tab stretching."""
-        # Burp may configure FlatLaf to fill the available tab strip.  A
-        # bounded child label does not change that enclosing tab-cell layout,
-        # so the pane itself must request leading, preferred-width cells.
-        return {
-            "JTabbedPane.tabAreaAlignment": "leading",
-            "JTabbedPane.tabWidthMode": "preferred",
-        }
+    def _tab_content_width(preferred_width=None):
+        """Return a natural content width capped at the readable UI maximum."""
+        maximum_width = 960
+        if preferred_width is None:
+            return maximum_width
+        return max(0, min(int(preferred_width), maximum_width))
 
     @staticmethod
     def _rule_group(rule):
@@ -290,21 +282,41 @@ class WafExtension(object):
                 tabs = JTabbedPane()
                 tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT)
 
-                # Apply layout policy to the tab pane, rather than relying on
-                # the child header's maximum size.  FlatLaf's fill alignment
-                # otherwise stretches the cells across Burp's full tab strip.
-                for property_name, property_value in self._tab_layout_properties().items():
-                    tabs.putClientProperty(property_name, property_value)
+                def bounded_tab_content(component):
+                    # GridBagLayout ignores a component's maximum width when
+                    # distributing surplus space.  Cap its preferred width and
+                    # put a weighted spacer beside it so surplus viewport width
+                    # is consumed to the right instead of stretching controls.
+                    preferred = component.getPreferredSize()
+                    component.setPreferredSize(Dimension(
+                        self._tab_content_width(preferred.width),
+                        preferred.height))
 
-                def add_compact_tab(title, component):
-                    tabs.addTab(title, component)
-                    header = JLabel(title, SwingConstants.CENTER)
-                    preferred = header.getPreferredSize()
-                    size = Dimension(self._tab_header_width(preferred.width),
-                                     preferred.height + 6)
-                    header.setPreferredSize(size)
-                    header.setMaximumSize(size)
-                    tabs.setTabComponentAt(tabs.getTabCount() - 1, header)
+                    # A zero minimum allows the column to shrink when Burp's
+                    # viewport is narrower than the configured 960-pixel cap.
+                    # Vertical weight and BOTH fill retain the existing full-
+                    # height scrolling behaviour of each tab.
+                    component.setMinimumSize(Dimension(0, 0))
+                    wrapper = JPanel(GridBagLayout())
+                    content_constraints = GridBagConstraints()
+                    content_constraints.gridx = 0
+                    content_constraints.gridy = 0
+                    content_constraints.weighty = 1.0
+                    content_constraints.fill = GridBagConstraints.BOTH
+                    content_constraints.anchor = GridBagConstraints.NORTHWEST
+                    wrapper.add(component, content_constraints)
+
+                    spacer_constraints = GridBagConstraints()
+                    spacer_constraints.gridx = 1
+                    spacer_constraints.gridy = 0
+                    spacer_constraints.weightx = 1.0
+                    spacer_constraints.weighty = 1.0
+                    spacer_constraints.fill = GridBagConstraints.BOTH
+                    wrapper.add(JPanel(), spacer_constraints)
+                    return wrapper
+
+                def add_bounded_tab(title, component):
+                    tabs.addTab(title, bounded_tab_content(component))
 
                 # Place each settings group at its preferred height.  The old
                 # single GridLayout filled the complete viewport and stretched
@@ -419,7 +431,7 @@ class WafExtension(object):
                 settings_view = JPanel()
                 settings_view.setLayout(BorderLayout())
                 settings_view.add(settings_panel, BorderLayout.NORTH)
-                add_compact_tab("Settings", JScrollPane(settings_view))
+                add_bounded_tab("Settings", JScrollPane(settings_view))
 
                 rule_checkboxes = []
                 for rule in self.catalogue.rules:
@@ -570,11 +582,11 @@ class WafExtension(object):
                     disable_visible.addActionListener(select_visible(False))
                     return tab
 
-                add_compact_tab("Detection Rules", catalogue_tab(
+                add_bounded_tab("Detection Rules", catalogue_tab(
                     rule_checkboxes, self._rule_search_values, self._rule_group,
                     self.RULE_GROUP_ORDER,
                     "Match rule name, ID, evidence group, or tag"))
-                add_compact_tab("Active Probes", catalogue_tab(
+                add_bounded_tab("Active Probes", catalogue_tab(
                     probe_checkboxes, self._probe_search_values, self._probe_group,
                     self.PROBE_GROUP_ORDER,
                     "Match probe name, ID, provider, action, method, placement, or content type"))
