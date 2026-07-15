@@ -44,6 +44,48 @@
       "value": "{\"value\":\"<script>alert(1)</script>\"}",
       "providers": ["aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "imperva"],
       "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.xss-attribute",
+      "name": "XSS attribute-context probe",
+      "value": "\" onmouseover=alert(1) x=\"",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.xss-encoded",
+      "name": "Encoded XSS parser probe",
+      "value": "%253Cscript%253Ealert%25281%2529%253C%252Fscript%253E",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.sqli-comment",
+      "name": "SQL comment probe",
+      "value": "1'/**/OR/**/1=1--",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.sqli-union-shaped",
+      "name": "SQL UNION-shaped probe",
+      "value": "1 UNION SELECT NULL--",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.traversal-encoded",
+      "name": "Double-encoded traversal marker",
+      "value": "..%252f..%252f..%252fwafd-nonexistent-marker",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva", "fortiweb"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.traversal-backslash",
+      "name": "Backslash traversal marker",
+      "value": "..\\\\..\\\\..\\\\wafd-nonexistent-marker",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva", "fortiweb"],
+      "actions": ["block", "challenge"]
     }
     ,{
       "id": "cloudflare.challenge-profile",

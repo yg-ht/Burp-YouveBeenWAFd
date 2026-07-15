@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "rules": [
-    {"id": "generic.block-status", "name": "Blocked status (weak standalone signal)", "evidence_group": "status", "weight": 4, "tags": ["generic"], "matcher": {"kind": "status", "values": [403, 406, 429, 503]}, "active": true},
+    {"id": "generic.block-status", "name": "Blocked status (weak standalone signal)", "evidence_group": "status", "weight": 4, "tags": ["generic"], "matcher": {"kind": "status", "values": [403, 405, 406, 413, 429, 503]}, "active": true},
     {"id": "generic.challenge-body", "name": "Challenge body (weak standalone signal)", "evidence_group": "body", "weight": 5, "tags": ["generic"], "matcher": {"kind": "body_terms", "values": ["access denied", "request blocked", "captcha", "security challenge"]}},
     {"id": "generic.status-transition", "name": "Benign-to-blocked probe transition", "evidence_group": "behaviour-block", "weight": 35, "tags": ["generic"], "matcher": {"kind": "status_transition", "blocked": [403, 406, 429, 503]}, "active": true},
     {"id": "generic.concealed-status-transition", "name": "Benign-to-concealed denial transition", "evidence_group": "behaviour-concealment", "weight": 18, "tags": ["generic"], "matcher": {"kind": "status_transition", "blocked": [404, 502]}, "active": true},

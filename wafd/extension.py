@@ -172,10 +172,11 @@ class WafExtension(object):
         try:
             request_info = self.helpers.analyzeRequest(baseRequestResponse)
             name = insertionPoint.getInsertionPointName()
-            payloads = self.probes.plan(request_info.getMethod(), name)
+            probe_entries = self.probes.plan_entries(request_info.getMethod(), name)
             results = []
-            for payload in payloads:
-                request = insertionPoint.buildRequest(payload.encode("utf-8"))
+            for probe in probe_entries:
+                request = insertionPoint.buildRequest(probe.value.encode("utf-8"))
+                request = self._apply_probe_profile(request, probe.profile)
                 response = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), request)
                 if response is None or response.getResponse() is None:
                     # A reset/no-response outcome is itself behavioural
@@ -200,6 +201,32 @@ class WafExtension(object):
         except Exception as error:
             self.callbacks.printError("WAF Detector active probe failed: %s" % error)
             return []
+
+    def _apply_probe_profile(self, request, profile):
+        """Apply only explicitly declared, non-authentication profile headers."""
+        request_headers = profile.get("request_headers", {}) if profile else {}
+        if profile and profile.get("accept"):
+            request_headers = dict(request_headers)
+            request_headers["Accept"] = profile["accept"]
+        if not request_headers:
+            return request
+        info = self.helpers.analyzeRequest(request)
+        headers = list(info.getHeaders())
+        lowered = dict((str(key).lower(), value) for key, value in request_headers.items())
+        updated = []
+        seen = set()
+        for header in headers:
+            name = str(header).split(":", 1)[0].strip().lower()
+            if name in lowered:
+                updated.append("%s: %s" % (name, lowered[name]))
+                seen.add(name)
+            else:
+                updated.append(str(header))
+        for name, value in lowered.items():
+            if name not in seen:
+                updated.append("%s: %s" % (name, value))
+        body = request[info.getBodyOffset():]
+        return self.helpers.buildHttpMessage(updated, body)
 
     def consolidateDuplicateIssues(self, existingIssue, newIssue):
         # A new assessment contains the current evidence and supersedes the old.
@@ -227,7 +254,13 @@ class WafExtension(object):
                 def getInsertionPointName(inner):
                     return "query"
                 def buildRequest(inner, payload):
-                    return extension.helpers.buildHttpMessage(request_info.getHeaders(), payload)
+                    headers = list(request_info.getHeaders())
+                    target = headers[0]
+                    separator = "&" if "?" in target else "?"
+                    encoded = extension.helpers.urlEncode(payload.decode("utf-8"))
+                    headers[0] = "%s%swafd_probe=%s" % (target, separator, encoded)
+                    body = message.getRequest()[request_info.getBodyOffset():]
+                    return extension.helpers.buildHttpMessage(headers, body)
             self.doActiveScan(message, SelectedPoint())
         except Exception as error:
             self.callbacks.printError("WAF Detector context probe failed: %s" % error)

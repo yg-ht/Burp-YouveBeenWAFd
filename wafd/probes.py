@@ -75,6 +75,23 @@ class ProbePlanner(object):
             return []
         provider_filter = set(providers or [])
         selected = []
+        for probe in self.plan_entries(method, insertion_point_name, providers):
+            for _ in range(probe.repeat):
+                selected.append(probe.value)
+                if len(selected) >= self.max_probes:
+                    return selected
+        return selected
+
+    def plan_entries(self, method, insertion_point_name="", providers=None):
+        """Return catalogue entries so adapters can apply profile metadata."""
+        method = str(method).upper()
+        if method not in ("GET", "HEAD", "OPTIONS") and not self.allow_non_idempotent:
+            return []
+        name = str(insertion_point_name).lower()
+        if any(term in name for term in ("cookie", "authorization", "header")):
+            return []
+        provider_filter = set(providers or [])
+        selected = []
         for probe in self.catalogue.probes:
             if not probe.enabled:
                 continue
@@ -82,8 +99,7 @@ class ProbePlanner(object):
                 continue
             if provider_filter and not provider_filter.intersection(probe.providers):
                 continue
-            for _ in range(probe.repeat):
-                selected.append(probe.value)
-                if len(selected) >= self.max_probes:
-                    return selected
+            selected.append(probe)
+            if len(selected) >= self.max_probes:
+                break
         return selected
