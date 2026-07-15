@@ -4,6 +4,8 @@ from wafd.assessment import AssessmentStore
 from wafd.config import Configuration
 from wafd.detector import ResponseDetector
 from wafd.extension import WafExtension
+from wafd.models import Evidence
+from wafd.overrides import CatalogueOverrides
 from wafd.probes import ProbeCatalogue, ProbePlanner
 from wafd.rules import RuleCatalogue
 
@@ -192,6 +194,67 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         self.assertEqual(state, "reset")
         self.assertGreaterEqual(elapsed, 0)
         self.assertTrue(extension.callbacks.errors)
+
+
+class ExtensionSettingsTests(unittest.TestCase):
+    def test_disabled_rule_and_probe_evidence_is_discarded(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"enabled","name":"Enabled","evidence_group":"one","weight":1},'
+            '{"id":"disabled","name":"Disabled","evidence_group":"two","weight":1}]}')
+        probes = ProbeCatalogue.from_json('{"schema_version":2,"probes":['
+            '{"id":"enabled-probe","value":"one"},'
+            '{"id":"disabled-probe","value":"two"}]}')
+        rules.rules[1].enabled = False
+        probes.probes[1].enabled = False
+        extension = WafExtension()
+        extension.catalogue = rules
+        extension.probes = ProbePlanner(catalogue=probes)
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.assessments.observe("https://x", [
+            Evidence("enabled", "https://x", "keep passive"),
+            Evidence("disabled", "https://x", "drop rule"),
+            Evidence("enabled", "https://x", "keep active",
+                     characteristic="enabled-probe"),
+            Evidence("enabled", "https://x", "drop probe",
+                     characteristic="disabled-probe"),
+        ])
+
+        extension._discard_disabled_evidence()
+
+        details = [item.detail for item in extension.assessments.assessments["https://x"].evidence]
+        self.assertEqual(details, ["keep passive", "keep active"])
+
+    def test_catalogue_overrides_are_loaded_and_saved_through_burp_settings(self):
+        class _SettingsCallbacks(_Callbacks):
+            def __init__(self):
+                _Callbacks.__init__(self)
+                self.settings = {}
+
+            def loadExtensionSetting(self, name):
+                return self.settings.get(name)
+
+            def saveExtensionSetting(self, name, value):
+                self.settings[name] = value
+
+        callbacks = _SettingsCallbacks()
+        callbacks.settings["catalogue_overrides"] = CatalogueOverrides(
+            {"rule": False}, {"probe": False}).to_json()
+        extension = WafExtension()
+        extension.callbacks = callbacks
+        extension._load_catalogue_overrides()
+        self.assertFalse(extension.overrides.rules["rule"])
+
+        extension.catalogue = RuleCatalogue.from_json('{"rules":['
+            '{"id":"rule","name":"Rule","evidence_group":"g","weight":1}]}')
+        probe_catalogue = ProbeCatalogue.from_json('{"schema_version":2,"probes":['
+            '{"id":"probe","value":"x"}]}')
+        extension.probes = ProbePlanner(catalogue=probe_catalogue)
+        extension.catalogue.rules[0].enabled = False
+        extension.probes.catalogue.probes[0].enabled = False
+        extension.save_catalogue_overrides()
+        restored = CatalogueOverrides.from_json(callbacks.settings["catalogue_overrides"])
+        self.assertFalse(restored.rules["rule"])
+        self.assertFalse(restored.probes["probe"])
 
 
 if __name__ == "__main__":

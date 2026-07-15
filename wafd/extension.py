@@ -9,7 +9,8 @@ from .assessment import AssessmentStore
 from .config import Configuration
 from .detector import ResponseDetector
 from .fingerprint import build_fingerprint
-from .probes import ProbePlanner
+from .overrides import CatalogueOverrides
+from .probes import ProbeCatalogue, ProbePlanner
 from .request_builder import ProbeRequestBuilder
 from .rules import RuleCatalogue
 
@@ -24,6 +25,7 @@ class WafExtension(object):
         self.detector = None
         self.assessments = None
         self.probes = None
+        self.overrides = CatalogueOverrides()
         self.request_builder = ProbeRequestBuilder()
         self.configuration = Configuration()
         self._panel = None
@@ -34,14 +36,17 @@ class WafExtension(object):
         self.helpers = callbacks.getHelpers()
         callbacks.setExtensionName("Burp WAF Detector")
         self.catalogue = self._load_default_catalogue()
+        probe_catalogue = ProbeCatalogue.bundled()
         self._load_configuration()
+        self._load_catalogue_overrides()
+        self.overrides.apply(self.catalogue.rules, probe_catalogue.probes)
         # The adapter owns Burp objects; the detector, scorer and planner stay
         # independent so their behaviour can be tested under CPython.
         self.detector = ResponseDetector(self.catalogue)
         self.assessments = AssessmentStore(self.catalogue.rules, self.configuration.threshold)
         # Non-GET probe profiles are permitted only when their catalogue entry
         # explicitly allows the method; the target policy controls the path.
-        self.probes = ProbePlanner(self.configuration.max_probes)
+        self.probes = ProbePlanner(self.configuration.max_probes, probe_catalogue)
         callbacks.registerHttpListener(self)
         callbacks.registerScannerCheck(self)
         callbacks.registerContextMenuFactory(self)
@@ -64,8 +69,24 @@ class WafExtension(object):
                 # extension from loading because a saved setting is stale.
                 self.callbacks.printError("WAF Detector ignored invalid saved configuration")
 
+    def _load_catalogue_overrides(self):
+        saved = self.callbacks.loadExtensionSetting("catalogue_overrides")
+        if saved:
+            try:
+                self.overrides = CatalogueOverrides.from_json(saved)
+            except (ValueError, TypeError):
+                # Invalid local settings must not prevent the bundled
+                # catalogues from loading with their declared defaults.
+                self.callbacks.printError("WAF Detector ignored invalid catalogue overrides")
+
     def save_configuration(self):
         self.callbacks.saveExtensionSetting("configuration", self.configuration.to_json())
+
+    def save_catalogue_overrides(self):
+        self.overrides = CatalogueOverrides.capture(
+            self.catalogue.rules, self.probes.catalogue.probes)
+        self.callbacks.saveExtensionSetting(
+            "catalogue_overrides", self.overrides.to_json())
 
     # IExtensionTab -----------------------------------------------------
     def getTabCaption(self):
@@ -75,43 +96,107 @@ class WafExtension(object):
         if self._panel is None:
             try:
                 from java.awt import BorderLayout, GridLayout
-                from javax.swing import (BorderFactory, JButton, JCheckBox, JLabel,
-                                         JPanel, JScrollPane, JTextField)
+                from javax.swing import (BorderFactory, JButton, JCheckBox, JComboBox,
+                                         JLabel, JPanel, JScrollPane, JTabbedPane,
+                                         JTextField)
                 self._panel = JPanel()
                 self._panel.setLayout(BorderLayout())
-                heading = JPanel(GridLayout(0, 2))
-                heading.add(JLabel("Passive monitoring"))
+
+                # Keep settings and the two large catalogues separate so the
+                # complete 200+ probe set remains practical to navigate.
+                tabs = JTabbedPane()
+                settings_panel = JPanel(GridLayout(0, 2))
+                settings_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
+                settings_panel.add(JLabel("Passive monitoring"))
                 enabled = JCheckBox("Enabled", self.configuration.enabled)
-                heading.add(enabled)
-                heading.add(JLabel("WAF confidence threshold (0-1)"))
+                settings_panel.add(enabled)
+                settings_panel.add(JLabel("Restrict passive monitoring to Burp scope"))
+                in_scope_only = JCheckBox("In-scope only", self.configuration.in_scope_only)
+                settings_panel.add(in_scope_only)
+                settings_panel.add(JLabel("WAF confidence threshold (0-1)"))
                 threshold = JTextField(str(self.configuration.threshold))
-                heading.add(threshold)
-                self._panel.add(heading, BorderLayout.NORTH)
+                settings_panel.add(threshold)
+                settings_panel.add(JLabel("Maximum probe requests (blank = unlimited)"))
+                max_probes = JTextField("" if self.configuration.max_probes is None else
+                                        str(self.configuration.max_probes))
+                settings_panel.add(max_probes)
+                settings_panel.add(JLabel("Constructed non-GET target"))
+                non_get_target = JComboBox()
+                non_get_target.addItem("root")
+                non_get_target.addItem("selected")
+                non_get_target.setSelectedItem(self.configuration.non_get_target)
+                settings_panel.add(non_get_target)
+                settings_panel.add(JLabel("Request-body test threshold (bytes)"))
+                body_threshold = JTextField(str(self.configuration.body_test_threshold))
+                settings_panel.add(body_threshold)
+                settings_panel.add(JLabel("Header-size test threshold (bytes)"))
+                header_threshold = JTextField(str(self.configuration.header_test_threshold))
+                settings_panel.add(header_threshold)
+                settings_panel.add(JLabel("Header-count test threshold"))
+                header_count_threshold = JTextField(
+                    str(self.configuration.header_count_test_threshold))
+                settings_panel.add(header_count_threshold)
+                settings_panel.add(JLabel("Body inspection boundary (bytes)"))
+                inspection_boundary = JTextField(str(self.configuration.inspection_boundary))
+                settings_panel.add(inspection_boundary)
+                settings_panel.add(JLabel("Hard maximum generated size (bytes)"))
+                size_hard_max = JTextField(str(self.configuration.size_hard_max))
+                settings_panel.add(size_hard_max)
+                tabs.addTab("Settings", JScrollPane(settings_panel))
 
                 rules_panel = JPanel()
                 rules_panel.setLayout(GridLayout(0, 1))
-                rules_panel.setBorder(BorderFactory.createTitledBorder("Detection rules"))
-                checkboxes = []
+                rules_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
+                rule_checkboxes = []
                 for rule in self.catalogue.rules:
                     # Rule enablement is deliberately user-selectable because
                     # fingerprints and acceptable false-positive rates vary by
                     # engagement.
                     checkbox = JCheckBox("%s [%s] (weight %.0f)" %
                                          (rule.name, rule.rule_id, rule.weight), rule.enabled)
-                    checkboxes.append((rule, checkbox))
+                    rule_checkboxes.append((rule, checkbox))
                     rules_panel.add(checkbox)
-                self._panel.add(JScrollPane(rules_panel), BorderLayout.CENTER)
+                tabs.addTab("Detection Rules", JScrollPane(rules_panel))
+
+                probes_panel = JPanel()
+                probes_panel.setLayout(GridLayout(0, 1))
+                probes_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
+                probe_checkboxes = []
+                for probe in self.probes.catalogue.probes:
+                    method = str(probe.profile.get("method", "/".join(probe.safe_methods)))
+                    placement = str(probe.profile.get("placement", "insertion point"))
+                    checkbox = JCheckBox("%s [%s] (%s, %s)" %
+                                         (probe.name, probe.probe_id, method, placement),
+                                         probe.enabled)
+                    probe_checkboxes.append((probe, checkbox))
+                    probes_panel.add(checkbox)
+                tabs.addTab("Active Probes", JScrollPane(probes_panel))
+                self._panel.add(tabs, BorderLayout.CENTER)
+
                 save = JButton("Save settings")
                 def save_settings(event):
-                    # Validate the complete editable state before persisting
-                    # it; a malformed threshold leaves current settings intact.
                     try:
-                        self.configuration.threshold = self.configuration._threshold(threshold.getText())
-                        self.configuration.enabled = enabled.isSelected()
-                        for rule, checkbox in checkboxes:
+                        # Build and validate a complete replacement before
+                        # mutating any live detector or catalogue state.
+                        maximum_text = str(max_probes.getText()).strip()
+                        candidate = Configuration(
+                            threshold.getText(), in_scope_only.isSelected(),
+                            None if not maximum_text else int(maximum_text),
+                            enabled.isSelected(), str(non_get_target.getSelectedItem()),
+                            int(body_threshold.getText()), int(header_threshold.getText()),
+                            int(header_count_threshold.getText()),
+                            int(inspection_boundary.getText()), int(size_hard_max.getText()))
+                        self.configuration = candidate
+                        for rule, checkbox in rule_checkboxes:
                             rule.enabled = checkbox.isSelected()
+                        for probe, checkbox in probe_checkboxes:
+                            probe.enabled = checkbox.isSelected()
                         self.assessments.engine.threshold = self.configuration.threshold
+                        self.probes.max_probes = self.configuration.max_probes
+                        self._discard_disabled_evidence()
                         self.save_configuration()
+                        self.save_catalogue_overrides()
+                        self.callbacks.printOutput("WAF Detector settings saved")
                     except (ValueError, TypeError) as error:
                         self.callbacks.printError("WAF Detector settings not saved: %s" % error)
                 save.addActionListener(save_settings)
@@ -119,6 +204,18 @@ class WafExtension(object):
             except ImportError:  # Allows the adapter to be imported by tests.
                 self._panel = object()
         return self._panel
+
+    def _discard_disabled_evidence(self):
+        """Remove observations disabled by the user's current catalogue choices."""
+        enabled_rules = set(rule.rule_id for rule in self.catalogue.rules if rule.enabled)
+        enabled_probes = set(probe.probe_id for probe in self.probes.catalogue.probes
+                             if probe.enabled)
+        for assessment in self.assessments.assessments.values():
+            assessment.evidence = [
+                item for item in assessment.evidence
+                if item.rule_id in enabled_rules and
+                (not item.characteristic or item.characteristic in enabled_probes)
+            ]
 
     # IHttpListener ----------------------------------------------------
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
