@@ -127,16 +127,19 @@ Before release, manually verify:
 
 1. Jython loads the entry point and all Python modules.
 2. Settings, rule overrides, and probe overrides persist across reload.
-3. All three UI tabs render and remain responsive with 213 probe controls.
-4. Passive in-scope/out-of-scope behaviour matches the checkbox.
-5. Scanner and context-menu requests appear correctly in Burp's extension
+3. All three UI tabs render and remain responsive with 213 probe controls;
+   settings and checkbox rows retain natural font-relative heights.
+4. Rule and probe filters match documented metadata, update visible counts,
+   and limit bulk enable/disable actions to visible rows.
+5. Passive in-scope/out-of-scope behaviour matches the checkbox.
+6. Scanner and context-menu requests appear correctly in Burp's extension
    traffic view.
-6. Constructed non-GET requests use `/` or the selected target as configured.
-7. Content types, multipart boundaries, duplicate parameters/cookies, and
+7. Constructed non-GET requests use `/` or the selected target as configured.
+8. Content types, multipart boundaries, duplicate parameters/cookies, and
    `Content-Length` are correct on the wire.
-8. HTTP/1.1 and HTTP/2 responses retain a usable version field.
-9. Timeout/reset behaviour is represented as Burp exposes it on the platform.
-10. One current issue remains after a large active matrix.
+9. HTTP/1.1 and HTTP/2 responses retain a usable version field.
+10. Timeout/reset behaviour is represented as Burp exposes it on the platform.
+11. One current issue remains after a large active matrix.
 
 ## Known limitations
 
@@ -145,8 +148,8 @@ Before release, manually verify:
 - The project uses the legacy Extender API and Jython 2.7 rather than Montoya.
 - Assessments and representative messages are held in memory and are not
   restored after extension reload or Burp exit.
-- Provider filtering exists in the planner API but is not exposed in the UI;
-  users select individual probe checkboxes instead.
+- Provider filtering exists in the planner API; the UI exposes provider data
+  through its general catalogue text filter rather than a dedicated dropdown.
 - Expected-response fields in probe profiles are documentation; shared rules,
   not profile-specific expressions, classify responses.
 - External responses cannot prove whether a WAF parsed, plain-text scanned,

@@ -89,6 +89,53 @@ class WafExtension(object):
         self.callbacks.saveExtensionSetting(
             "catalogue_overrides", self.overrides.to_json())
 
+    @staticmethod
+    def _matches_catalogue_filter(values, query):
+        """Return whether every whitespace-delimited term occurs in a row."""
+        # Multiple terms narrow a large catalogue predictably without adding a
+        # query language that users would need to learn.  Empty searches show
+        # every entry.
+        terms = [term for term in str(query or "").lower().split() if term]
+        searchable = " ".join(str(value) for value in values
+                              if value is not None).lower()
+        return all(term in searchable for term in terms)
+
+    @staticmethod
+    def _rule_search_values(rule):
+        """Return all rule metadata exposed through the catalogue filter."""
+        return ((rule.name, rule.rule_id, rule.evidence_group) +
+                tuple(rule.tags))
+
+    @staticmethod
+    def _probe_search_values(probe):
+        """Return probe identity, classification, and request metadata."""
+        profile = probe.profile or {}
+        return ((probe.name, probe.probe_id) + tuple(probe.providers) +
+                tuple(probe.actions) + tuple(probe.safe_methods) +
+                (profile.get("method"), profile.get("placement"),
+                 profile.get("content_type"), profile.get("classification")))
+
+    @classmethod
+    def _filter_catalogue_rows(cls, rows, query, value_getter):
+        """Update checkbox visibility and return the number of matching rows."""
+        visible = 0
+        for item, checkbox in rows:
+            matches = cls._matches_catalogue_filter(value_getter(item), query)
+            checkbox.setVisible(matches)
+            if matches:
+                visible += 1
+        return visible
+
+    @staticmethod
+    def _set_visible_catalogue_rows(rows, selected):
+        """Change only rows currently visible through a catalogue filter."""
+        changed = 0
+        for unused_item, checkbox in rows:
+            if checkbox.isVisible():
+                checkbox.setSelected(bool(selected))
+                changed += 1
+        return changed
+
     # IExtensionTab -----------------------------------------------------
     def getTabCaption(self):
         return "WAF Detector"
@@ -96,58 +143,88 @@ class WafExtension(object):
     def getUiComponent(self):
         if self._panel is None:
             try:
-                from java.awt import BorderLayout, GridLayout
-                from javax.swing import (BorderFactory, JButton, JCheckBox, JComboBox,
-                                         JLabel, JPanel, JScrollPane, JTabbedPane,
-                                         JTextField)
+                from java.awt import BorderLayout, FlowLayout, GridLayout
+                from javax.swing import (BorderFactory, Box, BoxLayout, JButton,
+                                         JCheckBox, JComboBox, JLabel, JPanel,
+                                         JScrollPane, JTabbedPane, JTextField)
                 self._panel = JPanel()
                 self._panel.setLayout(BorderLayout())
 
                 # Keep settings and the two large catalogues separate so the
                 # complete 200+ probe set remains practical to navigate.
                 tabs = JTabbedPane()
-                settings_panel = JPanel(GridLayout(0, 2))
+
+                # Place each settings group at its preferred height.  The old
+                # single GridLayout filled the complete viewport and stretched
+                # text fields to many times the active font height.
+                settings_panel = JPanel()
+                settings_panel.setLayout(BoxLayout(settings_panel, BoxLayout.Y_AXIS))
                 settings_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
-                settings_panel.add(JLabel("Passive monitoring"))
+
+                def settings_group(title):
+                    group = JPanel(GridLayout(0, 2, 8, 4))
+                    group.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createTitledBorder(title),
+                        BorderFactory.createEmptyBorder(4, 6, 6, 6)))
+                    group.setAlignmentX(0.0)
+                    return group
+
+                def add_setting(group, caption, component):
+                    label = JLabel(caption)
+                    label.setLabelFor(component)
+                    group.add(label)
+                    group.add(component)
+
+                detection_settings = settings_group("Detection")
                 enabled = JCheckBox("Enabled", self.configuration.enabled)
-                settings_panel.add(enabled)
-                settings_panel.add(JLabel("Restrict passive monitoring to Burp scope"))
+                add_setting(detection_settings, "Passive monitoring", enabled)
                 in_scope_only = JCheckBox("In-scope only", self.configuration.in_scope_only)
-                settings_panel.add(in_scope_only)
-                settings_panel.add(JLabel("WAF confidence threshold (0-1)"))
+                add_setting(detection_settings,
+                            "Restrict passive monitoring to Burp scope", in_scope_only)
                 threshold = JTextField(str(self.configuration.threshold))
-                settings_panel.add(threshold)
-                settings_panel.add(JLabel("Maximum probe requests (blank = unlimited)"))
+                add_setting(detection_settings, "WAF confidence threshold (0-1)", threshold)
+                settings_panel.add(detection_settings)
+                settings_panel.add(Box.createVerticalStrut(6))
+
+                active_settings = settings_group("Active probing")
                 max_probes = JTextField("" if self.configuration.max_probes is None else
                                         str(self.configuration.max_probes))
-                settings_panel.add(max_probes)
-                settings_panel.add(JLabel("Constructed non-GET target"))
+                add_setting(active_settings,
+                            "Maximum probe requests (blank = unlimited)", max_probes)
                 non_get_target = JComboBox()
                 non_get_target.addItem("root")
                 non_get_target.addItem("selected")
                 non_get_target.setSelectedItem(self.configuration.non_get_target)
-                settings_panel.add(non_get_target)
-                settings_panel.add(JLabel("Request-body test threshold (bytes)"))
+                add_setting(active_settings, "Constructed non-GET target", non_get_target)
+                settings_panel.add(active_settings)
+                settings_panel.add(Box.createVerticalStrut(6))
+
+                size_settings = settings_group("Size and inspection limits")
                 body_threshold = JTextField(str(self.configuration.body_test_threshold))
-                settings_panel.add(body_threshold)
-                settings_panel.add(JLabel("Header-size test threshold (bytes)"))
+                add_setting(size_settings, "Request-body test threshold (bytes)",
+                            body_threshold)
                 header_threshold = JTextField(str(self.configuration.header_test_threshold))
-                settings_panel.add(header_threshold)
-                settings_panel.add(JLabel("Header-count test threshold"))
+                add_setting(size_settings, "Header-size test threshold (bytes)",
+                            header_threshold)
                 header_count_threshold = JTextField(
                     str(self.configuration.header_count_test_threshold))
-                settings_panel.add(header_count_threshold)
-                settings_panel.add(JLabel("Body inspection boundary (bytes)"))
+                add_setting(size_settings, "Header-count test threshold",
+                            header_count_threshold)
                 inspection_boundary = JTextField(str(self.configuration.inspection_boundary))
-                settings_panel.add(inspection_boundary)
-                settings_panel.add(JLabel("Hard maximum generated size (bytes)"))
+                add_setting(size_settings, "Body inspection boundary (bytes)",
+                            inspection_boundary)
                 size_hard_max = JTextField(str(self.configuration.size_hard_max))
-                settings_panel.add(size_hard_max)
-                tabs.addTab("Settings", JScrollPane(settings_panel))
+                add_setting(size_settings, "Hard maximum generated size (bytes)",
+                            size_hard_max)
+                settings_panel.add(size_settings)
 
-                rules_panel = JPanel()
-                rules_panel.setLayout(GridLayout(0, 1))
-                rules_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
+                # BorderLayout.NORTH prevents BoxLayout from distributing spare
+                # viewport height between otherwise compact settings groups.
+                settings_view = JPanel()
+                settings_view.setLayout(BorderLayout())
+                settings_view.add(settings_panel, BorderLayout.NORTH)
+                tabs.addTab("Settings", JScrollPane(settings_view))
+
                 rule_checkboxes = []
                 for rule in self.catalogue.rules:
                     # Rule enablement is deliberately user-selectable because
@@ -156,12 +233,7 @@ class WafExtension(object):
                     checkbox = JCheckBox("%s [%s] (weight %.0f)" %
                                          (rule.name, rule.rule_id, rule.weight), rule.enabled)
                     rule_checkboxes.append((rule, checkbox))
-                    rules_panel.add(checkbox)
-                tabs.addTab("Detection Rules", JScrollPane(rules_panel))
 
-                probes_panel = JPanel()
-                probes_panel.setLayout(GridLayout(0, 1))
-                probes_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
                 probe_checkboxes = []
                 for probe in self.probes.catalogue.probes:
                     method = str(probe.profile.get("method", "/".join(probe.safe_methods)))
@@ -170,8 +242,71 @@ class WafExtension(object):
                                          (probe.name, probe.probe_id, method, placement),
                                          probe.enabled)
                     probe_checkboxes.append((probe, checkbox))
-                    probes_panel.add(checkbox)
-                tabs.addTab("Active Probes", JScrollPane(probes_panel))
+
+                def catalogue_tab(rows, value_getter, filter_description):
+                    tab = JPanel()
+                    tab.setLayout(BorderLayout(0, 6))
+                    tab.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
+
+                    controls = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2))
+                    filter_label = JLabel("Filter")
+                    filter_text = JTextField(24)
+                    filter_text.setToolTipText(filter_description)
+                    filter_label.setLabelFor(filter_text)
+                    apply_filter = JButton("Apply")
+                    clear_filter = JButton("Show all")
+                    enable_visible = JButton("Enable visible")
+                    disable_visible = JButton("Disable visible")
+                    visible_count = JLabel("%d of %d shown" % (len(rows), len(rows)))
+                    for component in (filter_label, filter_text, apply_filter,
+                                      clear_filter, enable_visible, disable_visible,
+                                      visible_count):
+                        controls.add(component)
+                    tab.add(controls, BorderLayout.NORTH)
+
+                    # BoxLayout retains each checkbox's natural height.  A
+                    # north-anchored wrapper leaves surplus viewport space below
+                    # the list instead of stretching every row.
+                    rows_panel = JPanel()
+                    rows_panel.setLayout(BoxLayout(rows_panel, BoxLayout.Y_AXIS))
+                    for unused_item, checkbox in rows:
+                        checkbox.setAlignmentX(0.0)
+                        rows_panel.add(checkbox)
+                    rows_view = JPanel()
+                    rows_view.setLayout(BorderLayout())
+                    rows_view.add(rows_panel, BorderLayout.NORTH)
+                    tab.add(JScrollPane(rows_view), BorderLayout.CENTER)
+
+                    def refresh_filter(event=None):
+                        shown = self._filter_catalogue_rows(
+                            rows, filter_text.getText(), value_getter)
+                        visible_count.setText("%d of %d shown" % (shown, len(rows)))
+                        rows_panel.revalidate()
+                        rows_panel.repaint()
+
+                    def show_all(event):
+                        filter_text.setText("")
+                        refresh_filter()
+
+                    def select_visible(selected):
+                        def apply_selection(event):
+                            self._set_visible_catalogue_rows(rows, selected)
+                        return apply_selection
+
+                    # Enter applies the filter without requiring mouse use.
+                    filter_text.addActionListener(refresh_filter)
+                    apply_filter.addActionListener(refresh_filter)
+                    clear_filter.addActionListener(show_all)
+                    enable_visible.addActionListener(select_visible(True))
+                    disable_visible.addActionListener(select_visible(False))
+                    return tab
+
+                tabs.addTab("Detection Rules", catalogue_tab(
+                    rule_checkboxes, self._rule_search_values,
+                    "Match rule name, ID, evidence group, or tag"))
+                tabs.addTab("Active Probes", catalogue_tab(
+                    probe_checkboxes, self._probe_search_values,
+                    "Match probe name, ID, provider, action, method, placement, or content type"))
                 self._panel.add(tabs, BorderLayout.CENTER)
 
                 save = JButton("Save settings")
@@ -201,7 +336,9 @@ class WafExtension(object):
                     except (ValueError, TypeError) as error:
                         self.callbacks.printError("WAF Detector settings not saved: %s" % error)
                 save.addActionListener(save_settings)
-                self._panel.add(save, BorderLayout.SOUTH)
+                actions = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 4))
+                actions.add(save)
+                self._panel.add(actions, BorderLayout.SOUTH)
             except ImportError:  # Allows the adapter to be imported by tests.
                 self._panel = object()
         return self._panel

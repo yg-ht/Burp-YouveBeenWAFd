@@ -10,6 +10,20 @@ The **WAF Detector** suite tab exposes **Settings**, **Detection Rules**, and
 **Active Probes**. Saving validates the complete settings object before any
 live state is changed.
 
+Settings are grouped into **Detection**, **Active probing**, and **Size and
+inspection limits**. Controls use their natural Swing height and remain pinned
+to the top of the scroll view, so resizing Burp does not stretch text fields.
+
+Both catalogue tabs provide a text filter, a visible/total count, **Show all**,
+and **Enable visible**/**Disable visible** actions. Press Enter in the filter or
+select **Apply** to update the list. Space-separated terms are combined: every
+term must occur in the row's searchable metadata. Rule searches include name,
+ID, evidence group, and tags. Probe searches include name, ID, provider,
+action, method, placement, content type, and classification.
+
+Filtering and bulk selection are local UI operations. Checkbox changes are not
+persisted and do not alter live detector state until **Save settings** is used.
+
 ## Extension settings
 
 The extension configuration schema is version 1.
@@ -245,8 +259,9 @@ catalogue order. It does not count same-shape control requests, so total HTTP
 traffic may be roughly twice that number for specialist profiles.
 
 The planner core supports provider filtering for programmatic callers. The
-current Burp UI does not expose a provider filter; use individual probe
-checkboxes instead.
+Burp UI's text filter also matches provider metadata, allowing a provider's
+visible probes to be reviewed or changed together without introducing a
+separate saved filter setting.
 
 ## Reload and rollback
 
