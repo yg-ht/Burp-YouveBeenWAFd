@@ -5,9 +5,13 @@ class ProbePlanner(object):
     """Plan bounded marker payloads without executing them."""
 
     DEFAULT_PAYLOADS = (
-        "wafd-probe-quote-'",
-        "wafd-probe-angle-<>",
-        "wafd-probe-path-..%2f..%2f",
+        # Insertion points perform location-specific encoding. These are the
+        # raw values corresponding to the common XSS and SQLi-shaped probes.
+        "<script>alert(1)</script>",
+        "' OR '1'='1",
+        # Keep the traversal target non-existent by default; the path shape is
+        # retained while avoiding an intentional request for /etc/passwd.
+        "../../../../wafd-nonexistent-marker",
     )
 
     def __init__(self, max_probes=3, allow_non_idempotent=False):
