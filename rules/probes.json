@@ -24,7 +24,8 @@
         "block",
         "challenge",
         "captcha"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.sqli-boolean",
@@ -49,7 +50,8 @@
         "block",
         "challenge",
         "captcha"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.traversal-marker",
@@ -73,7 +75,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.rate-limit-sequence",
@@ -96,7 +99,8 @@
         "GET",
         "HEAD",
         "OPTIONS"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.angle-encoding",
@@ -115,7 +119,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.json-script-fragment",
@@ -132,7 +137,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.xss-attribute",
@@ -150,7 +156,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.xss-encoded",
@@ -167,7 +174,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.sqli-comment",
@@ -186,7 +194,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.sqli-union-shaped",
@@ -205,7 +214,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.traversal-encoded",
@@ -224,7 +234,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.traversal-backslash",
@@ -243,7 +254,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.sqli-quote-comment",
@@ -262,7 +274,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.sqli-unquoted-boolean",
@@ -281,7 +294,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.sqli-expression",
@@ -297,7 +311,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.xss-html",
@@ -315,7 +330,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.xss-event",
@@ -333,7 +349,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.xss-javascript-uri",
@@ -348,7 +365,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.xss-svg",
@@ -363,7 +381,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.traversal-unix",
@@ -382,7 +401,7 @@
         "block",
         "challenge"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "safety": "requires inert text-only endpoint"
       }
@@ -403,7 +422,7 @@
         "block",
         "challenge"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "safety": "requires inert text-only endpoint"
       }
@@ -421,7 +440,7 @@
       "actions": [
         "block"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "safety": "requires inert text-only endpoint"
       }
@@ -443,7 +462,8 @@
       ],
       "profile": {
         "safety": "endpoint must not fetch remote resources"
-      }
+      },
+      "enabled": true
     },
     {
       "id": "generic.ssrf-documentation",
@@ -462,7 +482,8 @@
       ],
       "profile": {
         "safety": "endpoint must not fetch remote resources"
-      }
+      },
+      "enabled": true
     },
     {
       "id": "generic.command-marker",
@@ -480,7 +501,7 @@
         "block",
         "challenge"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "safety": "requires inert text-only endpoint"
       }
@@ -498,7 +519,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.el-marker",
@@ -513,7 +535,8 @@
       "actions": [
         "block",
         "challenge"
-      ]
+      ],
+      "enabled": true
     },
     {
       "id": "generic.php-filter",
@@ -527,7 +550,7 @@
       "actions": [
         "block"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "safety": "requires inert text-only endpoint"
       }
@@ -547,7 +570,8 @@
       ],
       "profile": {
         "safety": "printable marker only; no gadget chain"
-      }
+      },
+      "enabled": true
     },
     {
       "id": "generic.xml-safe-entity",
@@ -587,7 +611,7 @@
       "actions": [
         "block"
       ],
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "generic.invalid-percent",
@@ -604,7 +628,8 @@
       ],
       "profile": {
         "classification": "malformed-request"
-      }
+      },
+      "enabled": true
     },
     {
       "id": "generic.empty-value",
@@ -638,7 +663,7 @@
       "safe_methods": [
         "POST"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "content_type": "application/json",
         "endpoint": "inert GraphQL echo"
@@ -660,7 +685,7 @@
       "safe_methods": [
         "POST"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "content_types": [
           "application/json",
@@ -686,7 +711,7 @@
       "safe_methods": [
         "POST"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "content_type": "multipart/form-data",
         "field": "description",
@@ -707,7 +732,7 @@
         "block",
         "challenge"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "insertion_points": [
           "header"
@@ -730,7 +755,7 @@
         "block",
         "challenge"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "insertion_points": [
           "cookie"
@@ -755,7 +780,8 @@
           "cf-mitigated",
           "cf-ray"
         ]
-      }
+      },
+      "enabled": true
     },
     {
       "id": "aws.challenge-profile",
@@ -777,7 +803,8 @@
           202,
           405
         ]
-      }
+      },
+      "enabled": true
     },
     {
       "id": "azure.frontdoor-debug-profile",
@@ -796,7 +823,8 @@
         "expected_headers": [
           "x-azure-ref"
         ]
-      }
+      },
+      "enabled": true
     },
     {
       "id": "azure.gateway-json-profile",
@@ -811,7 +839,7 @@
       "safe_methods": [
         "POST"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "content_type": "application/json",
         "expected_body_terms": [
@@ -833,7 +861,7 @@
       "safe_methods": [
         "POST"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "content_type": "application/octet-stream",
         "body_size": "configured-limit-plus-one",
@@ -859,7 +887,8 @@
           429
         ],
         "note": "External response cannot prove denied_by_security_policy without logs"
-      }
+      },
+      "enabled": true
     },
     {
       "id": "modsecurity.crs-xss-profile",
@@ -878,7 +907,8 @@
           "949110"
         ],
         "diagnostic_header": "X-Format-Output"
-      }
+      },
+      "enabled": true
     },
     {
       "id": "f5.support-id-profile",
@@ -895,7 +925,8 @@
           "requested url was rejected",
           "support id"
         ]
-      }
+      },
+      "enabled": true
     },
     {
       "id": "akamai.reference-profile",
@@ -915,7 +946,8 @@
           "access denied",
           "reference #"
         ]
-      }
+      },
+      "enabled": true
     },
     {
       "id": "imperva.incident-profile",
@@ -934,7 +966,8 @@
           "request unsuccessful",
           "incapsula incident id"
         ]
-      }
+      },
+      "enabled": true
     },
     {
       "id": "fortiweb.reset-profile",
@@ -952,7 +985,8 @@
           "reset",
           "no-response"
         ]
-      }
+      },
+      "enabled": true
     }
   ]
 }

@@ -43,7 +43,7 @@ class ProbePlannerTests(unittest.TestCase):
         catalogue = ProbeCatalogue.bundled()
         profiles = dict((probe.probe_id, probe) for probe in catalogue.probes)
         self.assertIn("aws.challenge-profile", profiles)
-        self.assertEqual(profiles["azure.gateway-size-profile"].enabled, False)
+        self.assertTrue(profiles["azure.gateway-size-profile"].enabled)
         self.assertEqual(profiles["f5.support-id-profile"].profile["expected_body_terms"][1], "support id")
 
 
