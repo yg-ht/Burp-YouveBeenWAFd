@@ -129,10 +129,15 @@ class WafExtension(object):
     @staticmethod
     def _tab_content_width(preferred_width=None):
         """Return a natural content width capped at the readable UI maximum."""
-        maximum_width = 960
+        maximum_width = 1260
         if preferred_width is None:
             return maximum_width
         return max(0, min(int(preferred_width), maximum_width))
+
+    @staticmethod
+    def _tab_content_spacer_weights():
+        """Return equal GridBag weights used to centre bounded tab content."""
+        return 1.0, 1.0
 
     @staticmethod
     def _rule_group(rule):
@@ -285,34 +290,44 @@ class WafExtension(object):
                 def bounded_tab_content(component):
                     # GridBagLayout ignores a component's maximum width when
                     # distributing surplus space.  Cap its preferred width and
-                    # put a weighted spacer beside it so surplus viewport width
-                    # is consumed to the right instead of stretching controls.
+                    # put equal weighted spacers around it so surplus viewport
+                    # width centres the controls instead of stretching them.
                     preferred = component.getPreferredSize()
                     component.setPreferredSize(Dimension(
                         self._tab_content_width(preferred.width),
                         preferred.height))
 
                     # A zero minimum allows the column to shrink when Burp's
-                    # viewport is narrower than the configured 960-pixel cap.
+                    # viewport is narrower than the configured 1,260-pixel cap.
                     # Vertical weight and BOTH fill retain the existing full-
                     # height scrolling behaviour of each tab.
                     component.setMinimumSize(Dimension(0, 0))
                     wrapper = JPanel(GridBagLayout())
+
+                    left_weight, right_weight = self._tab_content_spacer_weights()
+                    left_spacer_constraints = GridBagConstraints()
+                    left_spacer_constraints.gridx = 0
+                    left_spacer_constraints.gridy = 0
+                    left_spacer_constraints.weightx = left_weight
+                    left_spacer_constraints.weighty = 1.0
+                    left_spacer_constraints.fill = GridBagConstraints.BOTH
+                    wrapper.add(JPanel(), left_spacer_constraints)
+
                     content_constraints = GridBagConstraints()
-                    content_constraints.gridx = 0
+                    content_constraints.gridx = 1
                     content_constraints.gridy = 0
                     content_constraints.weighty = 1.0
                     content_constraints.fill = GridBagConstraints.BOTH
                     content_constraints.anchor = GridBagConstraints.NORTHWEST
                     wrapper.add(component, content_constraints)
 
-                    spacer_constraints = GridBagConstraints()
-                    spacer_constraints.gridx = 1
-                    spacer_constraints.gridy = 0
-                    spacer_constraints.weightx = 1.0
-                    spacer_constraints.weighty = 1.0
-                    spacer_constraints.fill = GridBagConstraints.BOTH
-                    wrapper.add(JPanel(), spacer_constraints)
+                    right_spacer_constraints = GridBagConstraints()
+                    right_spacer_constraints.gridx = 2
+                    right_spacer_constraints.gridy = 0
+                    right_spacer_constraints.weightx = right_weight
+                    right_spacer_constraints.weighty = 1.0
+                    right_spacer_constraints.fill = GridBagConstraints.BOTH
+                    wrapper.add(JPanel(), right_spacer_constraints)
                     return wrapper
 
                 def add_bounded_tab(title, component):

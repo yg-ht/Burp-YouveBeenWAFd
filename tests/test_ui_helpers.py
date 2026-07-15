@@ -39,12 +39,18 @@ class CatalogueFilterTests(unittest.TestCase):
             WafExtension._non_get_target_value("unclear option")
 
     def test_tab_content_column_has_a_readable_maximum_width(self):
-        self.assertEqual(960, WafExtension._tab_content_width())
+        self.assertEqual(1260, WafExtension._tab_content_width())
 
     def test_tab_content_width_caps_wide_content_and_preserves_narrow_content(self):
         self.assertEqual(640, WafExtension._tab_content_width(640))
-        self.assertEqual(960, WafExtension._tab_content_width(1920))
+        self.assertEqual(1260, WafExtension._tab_content_width(1920))
         self.assertEqual(0, WafExtension._tab_content_width(-1))
+
+    def test_tab_content_uses_equal_positive_spacer_weights_for_centring(self):
+        left_weight, right_weight = WafExtension._tab_content_spacer_weights()
+
+        self.assertGreater(left_weight, 0.0)
+        self.assertEqual(left_weight, right_weight)
 
     def test_rules_are_grouped_by_provider_or_generic_behaviour(self):
         cloudflare = Rule("cf", "Cloudflare", "edge", 10,
