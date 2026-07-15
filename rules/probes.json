@@ -564,7 +564,7 @@
         "block",
         "challenge"
       ],
-      "enabled": false,
+      "enabled": true,
       "profile": {
         "content_types": [
           "application/xml",
@@ -619,7 +619,7 @@
       "actions": [
         "block"
       ],
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "generic.graphql-variable",
