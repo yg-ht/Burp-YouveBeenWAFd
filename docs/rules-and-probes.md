@@ -1,51 +1,57 @@
 # Rules, probes, and confidence
 
-The extension keeps detection logic in `data/default_rules.json` and active
-input in `data/probes.json`. Passive and active observations therefore share
-one rule catalogue rather than maintaining separate provider fingerprints.
+Passive and active observations use one rule catalogue. Active request values,
+placements, methods, and provider associations live separately in the probe
+catalogue, preventing probe routines from duplicating detection logic.
 
 ## Catalogue summary
 
-The bundled data currently contains:
+| Item | Count | Bundled state |
+| --- | ---: | --- |
+| Detection rules | 41 | All enabled |
+| Base probe definitions | 49 | All enabled |
+| Compact matrices | 17 | All enabled |
+| Matrix-expanded probes | 164 | All enabled |
+| Concrete probes exposed to the planner/UI | 213 | All enabled |
 
-| Catalogue | Entries | Enabled by default |
-| --- | ---: | ---: |
-| Detection rules | 38 | 38 |
-| Active probes | 49 | 49 |
+`repeat` can create more transmissions than concrete IDs. Conversely, a user
+limit, disabled checkbox, or incompatible legacy insertion-point method can
+reduce an operation.
 
-An enabled catalogue entry is merely eligible. The default active cap of three
-means a normal operation does not transmit all 49 probes.
+## Detection coverage
 
-## Detection-rule coverage
+### Generic evidence
 
-### Generic passive and behavioural rules
+Generic rules cover:
 
-The generic rules cover:
+- weak standalone error/block statuses and challenge terminology;
+- benign-to-blocked, rate-limited, concealed-denial, and request-policy
+  transitions, including 400, 403, 404, 413, 429, 431, 502, and 503 cases;
+- challenge status/body transitions;
+- body similarity and body-hash changes;
+- response-header additions;
+- mitigation-cookie additions and hashed cookie-value rotations;
+- HTTP-version changes;
+- reset, timeout, no-response, and other network errors;
+- broad active response divergence; and
+- zero-weight per-probe outcome records.
 
-- weak standalone block/error statuses;
-- weak challenge/body terminology;
-- benign-to-blocked, rate-limited, and concealed-denial transitions;
-- size rejection;
-- newly introduced challenge terms or challenge statuses;
-- body similarity, body hash, header, cookie, and HTTP-version changes;
-- transport reset or no-response outcomes; and
-- a broad active-response differential.
+Generic statuses and edge headers remain intentionally low confidence. A
+status transition, body replacement, or explicit vendor action carries more
+weight. Network failure remains weak because origin and transport faults can
+look like WAF intervention.
 
-Standalone status and visible-edge headers carry weights from 1 to 5. Stronger
-behavioural comparisons carry weights from 8 to 35. A reset is intentionally a
-low-confidence signal because network and origin failures can look identical.
+### Provider and product evidence
 
-### Provider and product rules
-
-| Provider/product | Signals represented |
+| Provider/product | Implemented signals |
 | --- | --- |
 | Cloudflare | Low-weight `server`/`cf-ray` edge markers and high-weight `cf-mitigated: challenge`. |
 | AWS WAF | Low-weight AWS edge marker and high-weight challenge/CAPTCHA action headers. |
-| Azure WAF | Low-weight Front Door reference, Front Door block text plus reference, and Application Gateway block template. |
-| Google Cloud Armor | Low-weight Google edge marker; external responses cannot authoritatively prove policy denial. |
-| ModSecurity / OWASP CRS | Weak product terminology and high-weight visible CRS rule-ID pattern. |
-| F5 BIG-IP Advanced WAF/ASM | Weak BIG-IP cookie marker and strong rejection/support-ID template. |
-| Akamai | Weak Akamai edge header and stronger edge-denial reference template; this does not prove App & API Protector caused it. |
+| Azure WAF | Front Door reference, block text plus reference, and Application Gateway block template. |
+| Google Cloud Armor | Low-weight Google edge marker; external response alone cannot prove policy denial. |
+| ModSecurity / OWASP CRS | Weak terminology and high-weight visible CRS rule-ID pattern. |
+| F5 BIG-IP Advanced WAF/ASM | Weak BIG-IP cookie name and strong rejection/support-ID template. |
+| Akamai | Weak edge header and 50-point edge-denial reference template; WAF causation remains uncertain. |
 | Imperva | Weak proxy marker and strong Imperva/Incapsula incident template. |
 | FortiWeb | Weak header marker and low-weight reset/no-response association. |
 | Barracuda | Low-weight header marker. |
@@ -53,116 +59,138 @@ low-confidence signal because network and origin failures can look identical.
 | Sucuri | Low-weight header marker. |
 | Fastly | Low-weight edge header marker. |
 
-Provider tags identify observed infrastructure or templates. Action tags are
-limited to `block`, `challenge`, `captcha`, `rate_limit`, and `reset` and are
-reported separately.
+Provider tags do not replace action tags. Supported action conclusions are
+`block`, `challenge`, `captcha`, `rate_limit`, and `reset`.
 
 ## Confidence model
 
-The 38 bundled rules occupy 37 evidence groups with a maximum combined weight
-of 1,067. Confidence is not a rule weight divided by 100. It is:
+The 41 bundled rules occupy 40 evidence groups. One group is the zero-weight
+active audit record. Positive weights are confidence points on a 0–100 scale.
+
+Confidence is:
 
 ```text
-sum(strongest matched rule in each evidence group)
---------------------------------------------------
-sum(strongest enabled rule in each evidence group)
+min(100, sum(strongest matched positive rule in each evidence group))
 ```
 
 Consequences:
 
-- A weight-100 rule is very strong relative evidence, but by itself does not
-  produce 100% overall confidence.
-- Multiple aliases in one evidence group cannot be stacked.
-- Disabling a rule can change both the numerator and denominator.
-- Adding a new independent evidence group changes the confidence scale.
-- The configured 60% threshold is inclusive.
+- A weight-100 rule produces 100% confidence by itself.
+- An 85-point explicit block template produces 85% confidence.
+- Independent behavioural signals such as 35 + 22 + 14 produce 71%.
+- Correlated rules in one evidence group cannot stack.
+- Repeating one rule across many concrete probes adds issue detail but not
+  repeated confidence weight.
+- The zero-weight outcome record never increases confidence.
+- Disabling rules removes their possible contribution.
+- Adding unrelated provider rules does not dilute existing evidence.
+- The default 60% threshold is inclusive.
 
-This behaviour makes distinct characteristics important, but catalogue changes
-must be reviewed as scoring-model changes rather than isolated signatures.
+Provider scores independently add provider-tagged confidence points and cap at
+100%.
 
-## Probe families
+## Probe values
 
-The 49 definitions cover the following catalogue families.
+The catalogue includes the explicitly requested inert/attack-shaped markers.
 
-### Generic attack-shaped values
+### SQL injection shapes
 
-- XSS: script, ordinary HTML, attribute/event handler, JavaScript URI, SVG,
-  encoded angle brackets, and encoded script forms.
-- SQL injection: quoted and unquoted booleans, quote/comment, comment,
-  UNION-shaped, and expression/function syntax.
-- Traversal/LFI: Unix and Windows traversal, absolute Unix path, encoded
-  traversal, and null-byte-shaped filename.
-- RFI/SSRF: reserved invalid domain and TEST-NET documentation address.
-- Command/expression markers: command separator, template expression, and
-  expression-language forms.
-- PHP and Java: PHP filter and printable non-executable Java serialisation
-  markers.
-- Parser/protocol shapes: safe internal XML entity, CRLF, invalid percent
-  encoding, and empty value.
-- Structured-input labels: JSON, GraphQL variable/query, multipart field,
-  header, and cookie markers.
-- A bounded rate-limit marker sequence.
+- `1'-- `
+- `1' OR '1'='1`
+- `1 OR 1=1`
+- `1 UNION SELECT NULL`
+- `ASCII(SUBSTRING(name,1,1))`
 
-The values are designed as input markers, not functional exploit chains. For
-example, the XML declaration contains no external entity and the SSRF values
-do not use localhost, cloud metadata services, or callback infrastructure.
+These are expanded across query, URL-encoded form, JSON, GraphQL variables,
+XML, SOAP, cookies, and request headers.
 
-### Vendor-associated profiles
+### XSS shapes
 
-- Cloudflare challenge
-- AWS WAF challenge
-- Azure Front Door diagnostic/header behaviour
-- Azure Application Gateway JSON and request-size behaviour
-- Google Cloud Armor concealed 404 differential
-- ModSecurity/OWASP CRS XSS behaviour
-- F5 rejection/support ID
-- Akamai edge reference
-- Imperva incident response
-- FortiWeb reset behaviour
+- `<script>alert(1)</script>`
+- `<h1>WAFTEST</h1>`
+- `<img src=x onerror=alert(1)>`
+- `javascript:alert(1)`
+- `<svg onload=alert(1)>`
 
-These associations guide research and expected interpretation. They do not
-make a generic payload vendor-exclusive, and profile metadata is not itself a
-detection rule.
+These are expanded across query, form, JSON, headers, cookies, XML, SOAP,
+GraphQL variables, multipart fields, filenames, and uploaded text content.
+The extension does not render returned payloads in its issue HTML; all dynamic
+details are escaped.
 
-## What the current adapter actually transmits
+### Other families
 
-The runtime does not yet expand one logical probe across every transport
-location listed in the catalogue research metadata. It selects a probe value
-and then either:
+- Unix/Windows traversal, absolute `/etc/passwd`, and null-byte-shaped LFI.
+- Reserved `example.invalid` and TEST-NET `192.0.2.1` RFI/SSRF shapes.
+- Three command-injection markers.
+- `{{7*7}}` and `${7*7}` expression markers.
+- PHP filter and PHP-code-shaped text.
+- Printable, non-executable Java serialisation marker.
+- Safe internal XML entity declaration with no external entity.
+- CRLF, null-byte, invalid-percent, empty-value, repeated-delimiter, and
+  empty-name forms.
+- GraphQL variables and direct queries without recursion or deep nesting.
+- Parameter-name and parameter-pollution comparisons.
+- HTTP method and method-override profiles.
+- Multipart and cookie/session profiles.
+- Request-size, header-size/count, and inspection-boundary profiles.
+- Vendor-associated challenge, denial, reference, incident, and reset profiles.
 
-- asks Burp's selected insertion point to build the request;
-- appends it as `wafd_probe` for a context-menu request; or
-- uses it as the body of a root-targeted non-GET request.
+The endpoint receives these as HTTP data. The extension does not access target
+files, fetch URLs, invoke PHP, deserialize Java data, execute shell commands,
+or render responses. It cannot guarantee that the target application also
+treats the values as inert.
 
-Consequently, the catalogue does **not currently implement** a full matrix of
-query, form, JSON, GraphQL, XML, SOAP, cookie, header, multipart filename,
-uploaded content, method, encoding, and size-boundary request builders.
-Likewise, expected-response profile fields are not automatically classified.
+## Placement and control semantics
 
-This distinction is essential when interpreting coverage: the values are
-present, but many specialised placements remain descriptive rather than
-executable.
+Each matrix value/placement pair becomes a concrete probe with its own ID and
+UI checkbox. Ordinary named query profiles replace the first existing
+parameter of that name, avoiding accidental parameter pollution. Only the HPP
+profiles deliberately create duplicates and preserve their declared order.
+
+Structured controls use the same method, target, headers, content type, field,
+and serialization as the probe. XML and SOAP values are escaped as text;
+GraphQL values use JSON string escaping. Multipart filenames are escaped for
+the wire representation and are never used locally.
+
+Size controls normally use the same configured size with an ordinary marker.
+Immediately-above probes declare a control-side immediately-below offset.
+Every generated size is checked against `size_hard_max`.
+
+## Active outcome interpretation
+
+Every completed active probe creates a zero-weight outcome such as:
+
+```text
+control HTTP 200; probe HTTP 403
+```
+
+Additional rules can then record status transitions, body/header/cookie
+differences, protocol changes, or provider signatures under the same concrete
+probe ID. Malformed-input profiles are explicitly labelled.
+
+An unchanged external response cannot prove whether a WAF structurally parsed,
+plain-text scanned, ignored, or permitted the value. Similarly, an external
+404 or reset may have non-WAF causes. Where authoritative vendor logs are
+available, correlate the recorded probe ID and response with those logs.
 
 ## Adding a rule
 
 1. Choose a stable unique ID.
-2. Decide whether the evidence is generic, provider-specific, action-specific,
-   or a combination.
-3. Place correlated observations in the same evidence group.
-4. Assign low weight to headers/statuses that can occur without a WAF action.
-5. Prefer a control/probe transition or explicit action signature where the
-   external response supports it.
-6. Add focused loader, detector, confidence, and escaping tests as applicable.
-7. Recalculate the scoring denominator and review the 60% threshold behaviour.
+2. Decide whether evidence is generic, provider-specific, action-specific, or
+   a combination.
+3. Put correlated observations in one evidence group.
+4. Keep ambient headers and generic statuses low weight.
+5. Prefer control/probe transitions or explicit action signatures.
+6. Add loader, detector, confidence, and output-escaping tests.
+7. Recalculate achievable additive confidence combinations and review threshold effects.
 
-## Adding a probe
+## Adding a probe or matrix
 
-1. Use a unique ID and a bounded raw string value.
-2. List only methods for which the entry is intended.
-3. Associate relevant providers and possible actions without claiming
-   exclusivity.
-4. Set `enabled` explicitly for readability.
-5. Put executable header changes only in `accept` or `request_headers`.
-6. Treat every other profile field as documentation until adapter support and
-   regression tests are added.
-7. Consider file order because it controls selection under the active cap.
+1. Keep every ID stable and unique after matrix expansion.
+2. Bound raw marker values to 4,096 characters.
+3. Declare each outgoing method in that profile's `safe_methods`.
+4. Associate providers/actions without claiming exclusivity.
+5. Supply a benign control value and an explicit placement.
+6. Add request-builder tests for both probe and control.
+7. Review total request volume; `repeat` and same-shape controls add traffic.
+8. Reload the extension and review persisted overrides for existing IDs.

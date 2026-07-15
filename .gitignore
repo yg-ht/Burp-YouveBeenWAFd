@@ -7,3 +7,6 @@
 # Python bytecode generated during local testing.
 __pycache__/
 *.py[cod]
+
+# Local engineering follow-up notes are intentionally not release artefacts.
+TODO.md

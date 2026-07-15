@@ -578,7 +578,7 @@
       "id": "akamai.edge-reference",
       "name": "Akamai edge denial reference",
       "evidence_group": "edge-denial-akamai",
-      "weight": 80,
+      "weight": 50,
       "tags": [
         "akamai",
         "product",

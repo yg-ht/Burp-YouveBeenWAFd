@@ -125,9 +125,10 @@ class ResponseDetector(object):
                 # Tags preserve separate product and action conclusions. Edge
                 # attribution therefore does not automatically imply that a
                 # managed WAF rule caused the response.
-                product = next((tag for tag in rule.tags if tag != "generic" and tag != "product"), "")
-                action = next((tag for tag in rule.tags if tag in
-                               ("block", "challenge", "captcha", "rate_limit", "reset")), "")
+                action_tags = ("block", "challenge", "captcha", "rate_limit", "reset")
+                product = next((tag for tag in rule.tags
+                                if tag not in ("generic", "product") + action_tags), "")
+                action = next((tag for tag in rule.tags if tag in action_tags), "")
                 found.append(Evidence(rule.rule_id, origin, detail, product, source, action,
                                       characteristic, classification))
         return found

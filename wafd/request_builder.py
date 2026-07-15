@@ -28,7 +28,7 @@ class ProbeRequestBuilder(object):
             raise ValueError("request requires a request line")
 
         method, target, version = self._parse_request_line(headers[0])
-        outgoing_method = str(profile.get("method", method)).upper()
+        outgoing_method = self._http_method(profile.get("method", method))
         placement = str(profile.get("placement", "raw_body"))
         limits = dict(limits or {})
 
@@ -37,7 +37,7 @@ class ProbeRequestBuilder(object):
         # preserve the selected target.
         endpoint = profile.get("endpoint")
         if endpoint:
-            target = str(endpoint)
+            target = self._request_target(endpoint)
         elif root_non_get and outgoing_method not in self.IDEMPOTENT_METHODS:
             target = "/"
 
@@ -166,6 +166,22 @@ class ProbeRequestBuilder(object):
             raise ValueError("invalid HTTP request line")
         return parts[0].upper(), parts[1], parts[2]
 
+    @staticmethod
+    def _http_method(value):
+        method = str(value).upper()
+        separators = '()<>@,;:\\"/[]?={} \t'
+        if not method or any(character in separators or ord(character) < 33 or ord(character) > 126
+                             for character in method):
+            raise ValueError("invalid HTTP method")
+        return method
+
+    @staticmethod
+    def _request_target(value):
+        target = str(value)
+        if not target or any(character in target for character in "\r\n \t"):
+            raise ValueError("invalid HTTP request target")
+        return target
+
     def _set_query_parameter(self, target, name, value, encoding):
         """Replace the first named parameter, or append it when absent."""
         if target == "*":
@@ -209,6 +225,8 @@ class ProbeRequestBuilder(object):
     @staticmethod
     def _append_raw_query(target, value):
         """Append deliberately malformed-but-bounded query syntax verbatim."""
+        if any(character in str(value) for character in "\r\n \t"):
+            raise ValueError("raw query syntax cannot contain whitespace or line breaks")
         before_fragment, marker, fragment = str(target).partition("#")
         separator = "" if before_fragment.endswith(("?", "&")) else (
             "&" if "?" in before_fragment else "?")

@@ -23,8 +23,9 @@ class Probe(object):
         # transitions without allowing an untrusted catalogue to create an
         # unbounded request loop.
         self.repeat = max(1, min(int(repeat), 10))
-        # Profiles may contain research and expected-response metadata. The
-        # Burp adapter currently acts only on request_headers and accept.
+        # Profiles combine request-construction fields with research and
+        # expected-response metadata. The request builder consumes declared
+        # placements; expected-response fields remain descriptive.
         self.profile = profile or {}
 
 

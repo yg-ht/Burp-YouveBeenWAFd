@@ -37,7 +37,7 @@ if the Python environment controls are not in the expected location.
 A successful load prints a message similar to:
 
 ```text
-Burp WAF Detector loaded with 38 rules
+Burp WAF Detector loaded with 41 rules
 ```
 
 The **WAF Detector** suite tab and **Probe for WAF** request context-menu item
@@ -79,15 +79,32 @@ output for the Python exception.
 
 ### Active scanning sends fewer probes than expected
 
-- The default maximum is three eligible catalogue entries per operation.
-- Entries are selected in catalogue order.
-- Each probe's `safe_methods` list must include the request method.
+- Confirm the probe is enabled under **Active Probes**.
+- Blank maximum means unlimited; zero means no probe transmissions.
+- A numeric maximum is applied in catalogue order and includes repeat runs.
+- Each constructed outgoing method must appear in that probe's `safe_methods`.
+- Legacy insertion-point probes still use the selected request's method.
 - Scanner insertion points whose names contain `cookie`, `authorization`, or
-  `header` are deliberately skipped by the planner.
+  `header` skip the legacy route; specialist profiles explicitly targeting
+  those locations remain available from another insertion point/context action.
 
 ### Settings do not survive reload
 
-The passive-enabled flag and confidence threshold are persisted using Burp's
-extension settings. Rule checkboxes change the in-memory catalogue for the
-current load only. To make rule enablement persistent, edit the rule's
-`enabled` field in `data/default_rules.json` and reload the extension.
+All Settings fields and rule/probe checkboxes are persisted through Burp's
+extension settings. If persistence fails:
+
+- Review Burp's extension Errors output for an invalid saved schema/value.
+- Confirm the extension was reloaded in the same Burp project/configuration.
+- Remember that editing bundled JSON does not delete an existing override for
+  the same rule/probe ID; change the checkbox or clear the saved extension
+  settings when testing new catalogue defaults.
+
+### Active probing sends many requests
+
+The default is every enabled concrete probe, and specialist profiles normally
+send an additional control. Before a broad run:
+
+- disable unneeded entries in **Active Probes**; or
+- enter a numeric maximum in **Settings**.
+
+The maximum counts probe transmissions, not controls.

@@ -41,11 +41,12 @@ class _RequestInfo(object):
 
 
 class _ResponseInfo(object):
-    def __init__(self, raw):
+    def __init__(self, raw, headers=None):
         self.raw = raw
+        self.headers = list(headers or [])
 
     def getHeaders(self):
-        return []
+        return self.headers
 
     def getBodyOffset(self):
         return self.raw.index(b"\r\n\r\n") + 4
@@ -65,6 +66,9 @@ class _Helpers(object):
     def buildHttpMessage(self, headers, body):
         body = body if isinstance(body, bytes) else str(body).encode("utf-8")
         return ("\r\n".join(str(header) for header in headers) + "\r\n\r\n").encode("utf-8") + body
+
+    def bytesToString(self, value):
+        return value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
 
 
 class _Message(object):
@@ -86,16 +90,14 @@ class _Callbacks(object):
     def __init__(self):
         self.requests = []
         self.errors = []
+        self.issues = []
 
     def makeHttpRequest(self, service, request):
         self.requests.append(request)
         return _Message(request, b"HTTP/1.1 403 Forbidden\r\n\r\nblocked")
 
-    def makeScannerIssue(self, *args):
-        return args
-
     def addScanIssue(self, issue):
-        pass
+        self.issues.append(issue)
 
     def printError(self, message):
         self.errors.append(message)
@@ -137,6 +139,14 @@ class ExtensionRequestLineTests(unittest.TestCase):
             request_line,
             "GET https://example.test/search?wafd_probe=marker HTTP/1.1")
 
+    def test_ipv6_origin_uses_bracketed_authority(self):
+        class _Ipv6Url(_Url):
+            def getHost(self):
+                return "2001:db8::1"
+
+        self.assertEqual(WafExtension._origin(_Ipv6Url()),
+                         "https://[2001:db8::1]:443")
+
 
 class ExtensionActiveAdapterTests(unittest.TestCase):
     def test_response_normalisation_extracts_version_from_raw_bytes(self):
@@ -145,6 +155,23 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         fingerprint = extension._normalise_response(raw, _ResponseInfo(raw), 12)
         self.assertEqual(fingerprint["http_version"], "1.1")
         self.assertEqual(fingerprint["elapsed_ms"], 12)
+
+    def test_response_normalisation_accepts_legacy_string_headers(self):
+        extension = WafExtension()
+        extension.helpers = _Helpers()
+        raw = (b"HTTP/1.1 403 Forbidden\r\nSet-Cookie: first=secret\r\n"
+               b"Set-Cookie: second=secret\r\nServer: cloudflare\r\n\r\nblocked")
+        response_info = _ResponseInfo(raw, [
+            "HTTP/1.1 403 Forbidden",
+            "Set-Cookie: first=secret",
+            "Set-Cookie: second=secret",
+            "Server: cloudflare",
+        ])
+        fingerprint = extension._normalise_response(raw, response_info)
+        self.assertEqual(fingerprint["http_version"], "1.1")
+        self.assertEqual(fingerprint["cookies"], ["first", "second"])
+        self.assertEqual(fingerprint["headers"]["server"], "cloudflare")
+        self.assertNotIn("secret", str(fingerprint))
 
     def test_specialist_profile_sends_one_control_and_all_repeats_at_root(self):
         rules = RuleCatalogue.from_json('{"rules":[]}')
@@ -180,6 +207,9 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         bodies = [request.split(b"\r\n\r\n", 1)[1]
                   for request in extension.callbacks.requests]
         self.assertEqual(bodies, [b"ordinary", b"marker", b"marker"])
+        self.assertEqual(len(extension.callbacks.issues), 1)
+        self.assertEqual(extension.callbacks.issues[0].getIssueName(),
+                         "WAF Detector: current assessment")
 
     def test_active_transport_exceptions_are_classified_without_escaping(self):
         extension = WafExtension()

@@ -102,6 +102,15 @@ class ProbeRequestBuilderTests(unittest.TestCase):
         self.assertFalse(any(header.lower().startswith("content-length:")
                              for header in built.headers))
 
+    def test_method_endpoint_and_raw_query_reject_request_line_injection(self):
+        with self.assertRaises(ValueError):
+            self.build({"placement": "raw_body", "method": "POST\r\nInjected: true"})
+        with self.assertRaises(ValueError):
+            self.build({"placement": "raw_body", "method": "POST",
+                        "endpoint": "/\r\nInjected: true"})
+        with self.assertRaises(ValueError):
+            self.build({"placement": "raw_query"}, "value\r\nInjected: true")
+
     def test_configured_size_probes_respect_threshold_and_hard_maximum(self):
         limits = {"body_test_threshold": 100, "header_test_threshold": 80,
                   "header_count_test_threshold": 5, "inspection_boundary": 60,

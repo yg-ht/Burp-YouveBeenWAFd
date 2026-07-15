@@ -124,6 +124,15 @@ class DetectorTests(unittest.TestCase):
                 "active", {"status": 200, "headers": {}, "body": "ordinary"})
             self.assertEqual(evidence[0].rule_id, "policy")
 
+    def test_generic_action_tag_is_not_reported_as_a_product(self):
+        catalogue = RuleCatalogue.from_json('{"rules": [{"id":"rate","name":"Rate",'
+            '"evidence_group":"rate","weight":10,"tags":["generic","rate_limit"],'
+            '"matcher":{"kind":"status","values":[429]}}]}')
+        evidence = ResponseDetector(catalogue).detect(
+            "https://x", {"status": 429, "headers": {}, "body": "limited"})
+        self.assertEqual(evidence[0].product, "")
+        self.assertEqual(evidence[0].action, "rate_limit")
+
 
 if __name__ == "__main__":
     unittest.main()

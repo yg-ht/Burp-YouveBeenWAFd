@@ -6,6 +6,7 @@ import re
 import time
 
 from .assessment import AssessmentStore
+from .burp_issue import WafScanIssue
 from .config import Configuration
 from .detector import ResponseDetector
 from .fingerprint import build_fingerprint
@@ -242,20 +243,40 @@ class WafExtension(object):
         return getattr(self.callbacks, "TOOL_EXTENDER", object()) == tool_flag
 
     def _normalise_response(self, raw_response, response_info, elapsed_ms=None):
-        # Burp exposes headers as name/value objects. Normalising names here
-        # gives the core detector one predictable, case-insensitive contract.
+        # Legacy Burp normally exposes response headers as strings, while test
+        # adapters and alternative wrappers may expose name/value objects.
+        # Accept both forms and skip the status line deterministically.
         headers = {}
+        status_line = ""
         for header in response_info.getHeaders():
-            name = str(header.getName()).lower()
-            value = str(header.getValue())
+            if hasattr(header, "getName") and hasattr(header, "getValue"):
+                name = str(header.getName()).lower()
+                value = str(header.getValue())
+            else:
+                text = str(header)
+                if ":" not in text:
+                    if text.upper().startswith("HTTP/"):
+                        status_line = text
+                    continue
+                name, value = text.split(":", 1)
+                name, value = name.strip().lower(), value.strip()
+            if not name:
+                continue
             # Preserve repeated response headers in one deterministic value;
             # Set-Cookie parsing needs every occurrence to observe mitigation
             # and session rotation without retaining cookie secrets.
             headers[name] = (headers[name] + "\n" + value) if name in headers else value
         body = raw_response[response_info.getBodyOffset():]
-        if not isinstance(body, str):
+        if not isinstance(body, str) and self.helpers is not None and hasattr(
+                self.helpers, "bytesToString"):
+            body = str(self.helpers.bytesToString(body))
+        elif not isinstance(body, str) and hasattr(body, "decode"):
             body = body.decode("utf-8", "replace")
-        first_line = raw_response.splitlines()[0] if raw_response.splitlines() else ""
+        elif not isinstance(body, str):
+            body = str(body)
+        first_line = status_line
+        if not first_line and hasattr(raw_response, "splitlines"):
+            first_line = raw_response.splitlines()[0] if raw_response.splitlines() else ""
         if hasattr(first_line, "decode"):
             first_line = first_line.decode("iso-8859-1", "replace")
         # Preserve HTTP/1.0, HTTP/1.1 and HTTP/2 for protocol-differential
@@ -268,6 +289,9 @@ class WafExtension(object):
     def _origin(url):
         protocol = str(url.getProtocol()).lower()
         host = str(url.getHost()).lower()
+        if ":" in host and not host.startswith("["):
+            # URL authorities require brackets around an IPv6 literal.
+            host = "[%s]" % host
         port = int(url.getPort())
         if port < 0:
             # Explicit ports keep assessments for different services separate,
@@ -278,15 +302,30 @@ class WafExtension(object):
     def _publish_issue(self, origin):
         """Publish a replaceable current assessment for one origin."""
         assessment = self.assessments.assessments[origin]
+        representative = assessment.representative_message
+        if representative is None:
+            # A legacy IScanIssue requires a concrete URL and HTTP service.
+            # Observations normally provide one; avoid inventing Java objects
+            # if an internal caller creates an assessment without a message.
+            return
         score = self.assessments.engine.score(assessment.evidence)[0]
         confidence = "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
         # Burp replaces earlier issues with the same identity via
         # consolidateDuplicateIssues(), leaving one current assessment.
-        issue = self.callbacks.makeScannerIssue(
-            origin, "WAF Detector: current assessment", self.assessments.detail(origin),
+        issue = WafScanIssue(
+            self._issue_url(origin, representative),
+            representative.getHttpService(), self.assessments.detail(origin),
             "Continue monitoring traffic and validate the suspected product manually.",
-            "Information", confidence, [assessment.representative_message] if assessment.representative_message else [])
+            "Information", confidence, [representative])
         self.callbacks.addScanIssue(issue)
+
+    def _issue_url(self, origin, representative):
+        """Return a stable origin URL, falling back outside the Jython runtime."""
+        try:
+            from java.net import URL
+            return URL(origin)
+        except ImportError:  # CPython adapter tests do not provide java.net.
+            return self.helpers.analyzeRequest(representative).getUrl()
 
     # IScannerCheck ----------------------------------------------------
     def doPassiveScan(self, baseRequestResponse):
@@ -366,7 +405,12 @@ class WafExtension(object):
                     self.callbacks.printError(
                         "WAF Detector skipped probe %s: %s" % (probe.probe_id, error))
                     continue
-                request = self._apply_probe_profile(request, probe.profile)
+                try:
+                    request = self._apply_probe_profile(request, probe.profile)
+                except (ValueError, TypeError) as error:
+                    self.callbacks.printError(
+                        "WAF Detector skipped probe %s: %s" % (probe.probe_id, error))
+                    continue
                 response, connection_state, elapsed_ms = self._send_active_request(
                     baseRequestResponse.getHttpService(), request)
                 if response is None or response.getResponse() is None:
@@ -441,6 +485,10 @@ class WafExtension(object):
             request_headers["Accept"] = profile["accept"]
         if not request_headers:
             return request
+        for name, value in request_headers.items():
+            if (not str(name) or ":" in str(name) or "\r" in str(name) or "\n" in str(name)
+                    or "\r" in str(value) or "\n" in str(value)):
+                raise ValueError("probe profile contains an invalid request header")
         info = self.helpers.analyzeRequest(request)
         headers = list(info.getHeaders())
         lowered = dict((str(key).lower(), value) for key, value in request_headers.items())
