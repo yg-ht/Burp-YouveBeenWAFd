@@ -8,9 +8,9 @@ Configuration is split between:
 
 The **WAF Detector** suite tab exposes **Settings**, **Detection Rules**, and
 **Active Probes**. Saving validates the complete settings object before any
-live state is changed. Each tab uses a left-aligned content column that retains
-its natural width up to a 960-pixel maximum and shrinks with narrower Burp
-windows. Surplus viewport space remains empty on the right instead of
+live state is changed. Each tab uses a centred content column that retains its
+natural width up to a 1,260-pixel maximum and shrinks with narrower Burp
+windows. Surplus viewport space is divided equally on either side instead of
 stretching fields and catalogue sections across the complete window.
 
 Settings are grouped into **Detection**, **Active probing**, and **Size and
