@@ -27,6 +27,18 @@ class AssessmentTests(unittest.TestCase):
         self.assertNotIn("<script>", detail)
         self.assertIn("&lt;script&gt;", detail)
 
+    def test_active_characteristics_are_retained_and_classified_separately(self):
+        store = AssessmentStore([Rule("r", "Rule", "g", 10)])
+        store.observe("https://x", [
+            Evidence("r", "https://x", "first", characteristic="probe.one"),
+            Evidence("r", "https://x", "second", characteristic="probe.two",
+                     classification="malformed-request"),
+        ])
+        detail = store.detail("https://x")
+        self.assertIn("probe.one", detail)
+        self.assertIn("probe.two", detail)
+        self.assertIn("malformed-request", detail)
+
 
 if __name__ == "__main__":
     unittest.main()

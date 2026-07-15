@@ -6,6 +6,9 @@ except ImportError:  # pragma: no cover - Jython 2.7 uses the fallback classes.
     dataclass = None
 
 
+# CPython uses dataclasses in the testable core, while Burp's Jython 2.7
+# runtime receives equivalent plain classes. Keep the two representations
+# field-compatible so the detector has no Burp-specific data path.
 if dataclass:
     @dataclass
     class Rule:
@@ -29,6 +32,8 @@ if dataclass:
         product: str = ""
         source: str = "passive"
         action: str = ""
+        characteristic: str = ""
+        classification: str = ""
 
     @dataclass
     class OriginAssessment:
@@ -40,6 +45,8 @@ if dataclass:
 
 else:
     class Rule(object):
+        """Jython-compatible representation of a detection rule."""
+
         def __init__(self, rule_id, name, evidence_group, weight, tags=(), matcher=None,
                      enabled=True):
             self.rule_id, self.name = rule_id, name
@@ -48,11 +55,18 @@ else:
             self.enabled = bool(enabled)
 
     class Evidence(object):
-        def __init__(self, rule_id, origin, detail, product="", source="passive", action=""):
+        """Jython-compatible representation of one observation."""
+
+        def __init__(self, rule_id, origin, detail, product="", source="passive", action="",
+                     characteristic="", classification=""):
             self.rule_id, self.origin, self.detail = rule_id, origin, detail
             self.product, self.source, self.action = product, source, action
+            self.characteristic = characteristic
+            self.classification = classification
 
     class OriginAssessment(object):
+        """Jython-compatible assessment container for one origin."""
+
         def __init__(self, origin, evidence=None, representative_message=None):
             self.origin = origin
             self.evidence = list(evidence or [])

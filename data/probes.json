@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "probes": [
     {
       "id": "generic.xss-script",
@@ -240,7 +240,7 @@
     {
       "id": "generic.traversal-backslash",
       "name": "Backslash traversal marker",
-      "value": "..\\\\..\\\\..\\\\wafd-nonexistent-marker",
+      "value": "..\\..\\..\\wafd-nonexistent-marker",
       "providers": [
         "cloudflare",
         "aws-waf",
@@ -409,7 +409,7 @@
     {
       "id": "generic.traversal-windows",
       "name": "Windows traversal reference profile",
-      "value": "..\\\\..\\\\..\\\\Windows\\\\win.ini",
+      "value": "..\\..\\..\\Windows\\win.ini",
       "providers": [
         "cloudflare",
         "aws-waf",
@@ -985,6 +985,1292 @@
           "reset",
           "no-response"
         ]
+      },
+      "enabled": true
+    }
+  ],
+  "matrices": [
+    {
+      "id": "matrix.sqli",
+      "name": "SQL-injection-shaped input",
+      "values": [
+        {
+          "id": "quote-comment",
+          "name": "Quote and comment",
+          "value": "1'-- "
+        },
+        {
+          "id": "quoted-boolean",
+          "name": "Quoted boolean",
+          "value": "1' OR '1'='1"
+        },
+        {
+          "id": "unquoted-boolean",
+          "name": "Unquoted boolean",
+          "value": "1 OR 1=1"
+        },
+        {
+          "id": "union-select",
+          "name": "UNION SELECT",
+          "value": "1 UNION SELECT NULL"
+        },
+        {
+          "id": "expression",
+          "name": "SQL expression",
+          "value": "ASCII(SUBSTRING(name,1,1))"
+        }
+      ],
+      "placements": [
+        {
+          "id": "query",
+          "name": "Query parameter",
+          "placement": "query",
+          "parameter": "id",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "form",
+          "name": "URL-encoded form",
+          "placement": "form",
+          "parameter": "id",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "json",
+          "name": "JSON string",
+          "placement": "json",
+          "parameter": "id",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "graphql-variable",
+          "name": "GraphQL variable",
+          "placement": "graphql_variables",
+          "parameter": "id",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "xml",
+          "name": "XML element",
+          "placement": "xml",
+          "parameter": "id",
+          "content_type": "application/xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "soap",
+          "name": "SOAP element",
+          "placement": "soap",
+          "content_type": "application/soap+xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "cookie",
+          "name": "Cookie value",
+          "placement": "cookie",
+          "cookie": "waf_test",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "header",
+          "name": "Request header",
+          "placement": "header",
+          "header": "X-WAF-Test",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb",
+        "barracuda",
+        "radware",
+        "sucuri",
+        "fastly"
+      ],
+      "actions": [
+        "block",
+        "challenge",
+        "captcha"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.xss",
+      "name": "Cross-site-scripting-shaped input",
+      "values": [
+        {
+          "id": "script",
+          "name": "Script element",
+          "value": "<script>alert(1)</script>"
+        },
+        {
+          "id": "html",
+          "name": "Ordinary HTML element",
+          "value": "<h1>WAFTEST</h1>"
+        },
+        {
+          "id": "event",
+          "name": "Event handler",
+          "value": "<img src=x onerror=alert(1)>"
+        },
+        {
+          "id": "javascript-uri",
+          "name": "JavaScript URI",
+          "value": "javascript:alert(1)"
+        },
+        {
+          "id": "svg-event",
+          "name": "SVG event handler",
+          "value": "<svg onload=alert(1)>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "query",
+          "name": "Query parameter",
+          "placement": "query",
+          "parameter": "q",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "form",
+          "name": "URL-encoded form",
+          "placement": "form",
+          "parameter": "q",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "json",
+          "name": "JSON string",
+          "placement": "json",
+          "parameter": "q",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "header",
+          "name": "Request header",
+          "placement": "header",
+          "header": "X-WAF-Test",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "cookie",
+          "name": "Cookie value",
+          "placement": "cookie",
+          "cookie": "waf_test",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "xml",
+          "name": "XML element",
+          "placement": "xml",
+          "parameter": "q",
+          "content_type": "application/xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "soap",
+          "name": "SOAP element",
+          "placement": "soap",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "graphql-variable",
+          "name": "GraphQL variable",
+          "placement": "graphql_variables",
+          "parameter": "value",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "multipart-field",
+          "name": "Multipart field",
+          "placement": "multipart_field",
+          "field": "description",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "multipart-filename",
+          "name": "Multipart filename",
+          "placement": "multipart_filename",
+          "field": "upload",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "multipart-content",
+          "name": "Uploaded text content",
+          "placement": "multipart_file",
+          "field": "upload",
+          "filename": "waf-test.txt",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb",
+        "barracuda",
+        "radware",
+        "sucuri",
+        "fastly"
+      ],
+      "actions": [
+        "block",
+        "challenge",
+        "captcha"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.content-type",
+      "name": "Content-type parser behaviour",
+      "values": [
+        {
+          "id": "xss-marker",
+          "name": "Identical XSS-shaped body",
+          "value": "<script>alert(1)</script>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "json",
+          "name": "application/json",
+          "placement": "raw_body",
+          "content_type": "application/json",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "vendor-json",
+          "name": "Vendor JSON",
+          "placement": "raw_body",
+          "content_type": "application/vnd.example.resource+json",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "text",
+          "name": "text/plain",
+          "placement": "raw_body",
+          "content_type": "text/plain",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "form",
+          "name": "Form media type",
+          "placement": "raw_body",
+          "content_type": "application/x-www-form-urlencoded",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "application-xml",
+          "name": "application/xml",
+          "placement": "raw_body",
+          "content_type": "application/xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "text-xml",
+          "name": "text/xml",
+          "placement": "raw_body",
+          "content_type": "text/xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "soap",
+          "name": "application/soap+xml",
+          "placement": "raw_body",
+          "content_type": "application/soap+xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "octets",
+          "name": "application/octet-stream",
+          "placement": "raw_body",
+          "content_type": "application/octet-stream",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.graphql-query",
+      "name": "GraphQL direct query input",
+      "values": [
+        {
+          "id": "sqli",
+          "name": "SQL-shaped value",
+          "value": "1' OR '1'='1"
+        },
+        {
+          "id": "xss",
+          "name": "XSS-shaped value",
+          "value": "<script>alert(1)</script>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "json",
+          "name": "GraphQL JSON body",
+          "placement": "graphql_query",
+          "content_type": "application/json",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "graphql",
+          "name": "application/graphql body",
+          "placement": "graphql_query",
+          "content_type": "application/graphql",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.hpp",
+      "name": "HTTP parameter pollution",
+      "values": [
+        {
+          "id": "sqli",
+          "name": "SQL-shaped duplicate value",
+          "value": "1' OR '1'='1"
+        }
+      ],
+      "placements": [
+        {
+          "id": "ordinary-first",
+          "name": "Ordinary value first",
+          "placement": "query_pairs",
+          "parameters": [
+            {
+              "name": "id",
+              "value": "ordinary"
+            },
+            {
+              "name": "id",
+              "value": "$value"
+            }
+          ],
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "probe-first",
+          "name": "Probe value first",
+          "placement": "query_pairs",
+          "parameters": [
+            {
+              "name": "id",
+              "value": "$value"
+            },
+            {
+              "name": "id",
+              "value": "ordinary"
+            }
+          ],
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.parameter-name",
+      "name": "Parameter-name sensitivity",
+      "values": [
+        {
+          "id": "marker",
+          "name": "Neutral marker",
+          "value": "WAFTEST"
+        }
+      ],
+      "placements": [
+        {
+          "id": "cmd",
+          "name": "cmd parameter",
+          "placement": "query",
+          "parameter": "cmd",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "description",
+          "name": "description parameter",
+          "placement": "query",
+          "parameter": "description",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.protocol-input",
+      "name": "Protocol and encoding handling",
+      "values": [
+        {
+          "id": "crlf",
+          "name": "CRLF-shaped value",
+          "value": "%0D%0A"
+        },
+        {
+          "id": "null",
+          "name": "Null-byte-shaped value",
+          "value": "%00"
+        },
+        {
+          "id": "invalid-percent",
+          "name": "Invalid percent encoding",
+          "value": "%ZZ"
+        },
+        {
+          "id": "empty",
+          "name": "Empty value",
+          "value": ""
+        }
+      ],
+      "placements": [
+        {
+          "id": "query",
+          "name": "Raw query value",
+          "placement": "query",
+          "parameter": "wafd",
+          "encoding": "raw",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary",
+        "classification": "malformed-request"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.query-structure",
+      "name": "Unusual query structure",
+      "values": [
+        {
+          "id": "repeated-delimiters",
+          "name": "Repeated delimiters",
+          "value": "&&wafd=WAFTEST"
+        },
+        {
+          "id": "empty-name",
+          "name": "Empty parameter name",
+          "value": "=WAFTEST"
+        }
+      ],
+      "placements": [
+        {
+          "id": "raw-query",
+          "name": "Raw query suffix",
+          "placement": "raw_query",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "wafd=ordinary",
+        "classification": "malformed-request"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.http-method",
+      "name": "HTTP method policy",
+      "values": [
+        {
+          "id": "marker",
+          "name": "Neutral method marker",
+          "value": "WAFTEST"
+        }
+      ],
+      "placements": [
+        {
+          "id": "get",
+          "name": "GET",
+          "placement": "query",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "post",
+          "name": "POST",
+          "placement": "raw_body",
+          "content_type": "text/plain",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "head",
+          "name": "HEAD",
+          "placement": "query",
+          "method": "HEAD",
+          "safe_methods": [
+            "HEAD"
+          ]
+        },
+        {
+          "id": "options",
+          "name": "OPTIONS",
+          "placement": "query",
+          "method": "OPTIONS",
+          "safe_methods": [
+            "OPTIONS"
+          ]
+        },
+        {
+          "id": "put",
+          "name": "PUT",
+          "placement": "raw_body",
+          "content_type": "text/plain",
+          "method": "PUT",
+          "safe_methods": [
+            "PUT"
+          ]
+        },
+        {
+          "id": "delete",
+          "name": "DELETE",
+          "placement": "query",
+          "method": "DELETE",
+          "safe_methods": [
+            "DELETE"
+          ]
+        },
+        {
+          "id": "patch",
+          "name": "PATCH",
+          "placement": "raw_body",
+          "content_type": "text/plain",
+          "method": "PATCH",
+          "safe_methods": [
+            "PATCH"
+          ]
+        },
+        {
+          "id": "trace",
+          "name": "TRACE",
+          "placement": "query",
+          "method": "TRACE",
+          "safe_methods": [
+            "TRACE"
+          ]
+        },
+        {
+          "id": "custom",
+          "name": "WAFTEST",
+          "placement": "query",
+          "method": "WAFTEST",
+          "safe_methods": [
+            "WAFTEST"
+          ]
+        },
+        {
+          "id": "method-override",
+          "name": "X-HTTP-Method-Override DELETE",
+          "placement": "raw_body",
+          "content_type": "text/plain",
+          "method": "POST",
+          "request_headers": {
+            "X-HTTP-Method-Override": "DELETE"
+          },
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary",
+        "endpoint": "/"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.multipart",
+      "name": "Multipart parser behaviour",
+      "values": [
+        {
+          "id": "xss-marker",
+          "name": "XSS-shaped text",
+          "value": "<script>alert(1)</script>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "field",
+          "name": "Suspicious form field",
+          "placement": "multipart_field",
+          "field": "description",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "filename",
+          "name": "Suspicious filename",
+          "placement": "multipart_filename",
+          "field": "upload",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "file-content",
+          "name": "Suspicious uploaded text",
+          "placement": "multipart_file",
+          "field": "upload",
+          "filename": "waf-test.txt",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "octet-part",
+          "name": "Differing part content type",
+          "placement": "multipart_file",
+          "field": "upload",
+          "filename": "waf-test.txt",
+          "part_content_type": "application/octet-stream",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "empty-filename",
+          "name": "Empty filename",
+          "placement": "multipart_empty_filename",
+          "field": "upload",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "multiple-files",
+          "name": "Multiple files",
+          "placement": "multipart_multiple_files",
+          "field": "upload",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "repeated-fields",
+          "name": "Repeated field names",
+          "placement": "multipart_repeated_field",
+          "field": "description",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.xml-safe-entity",
+      "name": "Safe internal XML entity",
+      "values": [
+        {
+          "id": "internal-entity",
+          "name": "Internal entity declaration",
+          "value": "<?xml version=\"1.0\"?>\n<!DOCTYPE test [\n  <!ENTITY waf \"WAFTEST\">\n]>\n<test>&waf;</test>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "application-xml",
+          "name": "application/xml",
+          "placement": "raw_body",
+          "content_type": "application/xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "text-xml",
+          "name": "text/xml",
+          "placement": "raw_body",
+          "content_type": "text/xml",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [
+        "modsecurity",
+        "cloudflare",
+        "aws-waf",
+        "azure-waf"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "<test>ordinary</test>",
+        "safety": "internal entity only; no file or network entity"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.cookie-behaviour",
+      "name": "Cookie and session behaviour",
+      "values": [
+        {
+          "id": "session-marker",
+          "name": "Fixed session identifier marker",
+          "value": "WAFTESTSESSION"
+        },
+        {
+          "id": "empty",
+          "name": "Empty cookie value",
+          "value": ""
+        }
+      ],
+      "placements": [
+        {
+          "id": "single",
+          "name": "Single cookie",
+          "placement": "cookie",
+          "cookie": "waf_test_session",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "repeated",
+          "name": "Repeated cookie name",
+          "placement": "cookie_repeated",
+          "cookie": "waf_test_session",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "multiple-headers",
+          "name": "Multiple Cookie headers",
+          "placement": "cookie_multiple_headers",
+          "cookie": "waf_test_session",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.size-boundary",
+      "name": "Configured request-size boundary",
+      "values": [
+        {
+          "id": "marker",
+          "name": "Harmless size marker",
+          "value": "WAFTEST"
+        }
+      ],
+      "placements": [
+        {
+          "id": "body-half",
+          "name": "Body at 50 percent",
+          "placement": "sized_body",
+          "threshold_factor": 0.5,
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "body-three-quarters",
+          "name": "Body at 75 percent",
+          "placement": "sized_body",
+          "threshold_factor": 0.75,
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "body-below",
+          "name": "Body immediately below",
+          "placement": "sized_body",
+          "threshold_offset": -1,
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "body-above",
+          "name": "Body immediately above",
+          "placement": "sized_body",
+          "threshold_offset": 1,
+          "control_profile": {
+            "threshold_offset": -1
+          },
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "header-half",
+          "name": "Single header at 50 percent",
+          "placement": "sized_header",
+          "threshold_factor": 0.5,
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "header-three-quarters",
+          "name": "Single header at 75 percent",
+          "placement": "sized_header",
+          "threshold_factor": 0.75,
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "header-below",
+          "name": "Single header immediately below",
+          "placement": "sized_header",
+          "threshold_offset": -1,
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "header-above",
+          "name": "Single header immediately above",
+          "placement": "sized_header",
+          "threshold_offset": 1,
+          "control_profile": {
+            "threshold_offset": -1
+          },
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "count-below",
+          "name": "Header count immediately below",
+          "placement": "header_count",
+          "threshold_offset": -1,
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "count-above",
+          "name": "Header count immediately above",
+          "placement": "header_count",
+          "threshold_offset": 1,
+          "control_profile": {
+            "threshold_offset": -1
+          },
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "total-headers-below",
+          "name": "Total header size immediately below",
+          "placement": "total_header_size",
+          "threshold_offset": -1,
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        },
+        {
+          "id": "total-headers-above",
+          "name": "Total header size immediately above",
+          "placement": "total_header_size",
+          "threshold_offset": 1,
+          "control_profile": {
+            "threshold_offset": -1
+          },
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [
+        "azure-waf",
+        "fortiweb",
+        "f5",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "reset"
+      ],
+      "profile": {
+        "control_value": "ordinary",
+        "endpoint": "/"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.inspection-boundary",
+      "name": "Configured inspection boundary",
+      "values": [
+        {
+          "id": "xss-marker",
+          "name": "Harmless signature marker",
+          "value": "<script>alert(1)</script>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "beginning",
+          "name": "Near beginning",
+          "placement": "inspection_body",
+          "marker_position": "beginning",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "before",
+          "name": "Immediately before boundary",
+          "placement": "inspection_body",
+          "marker_position": "before-boundary",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "after",
+          "name": "Immediately after boundary",
+          "placement": "inspection_body",
+          "marker_position": "after-boundary",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        },
+        {
+          "id": "end",
+          "name": "Near end",
+          "placement": "inspection_body",
+          "marker_position": "end",
+          "method": "POST",
+          "safe_methods": [
+            "POST"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary",
+        "endpoint": "/"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.command-markers",
+      "name": "Command-injection-shaped inert marker",
+      "values": [
+        {
+          "id": "semicolon",
+          "name": "Semicolon marker",
+          "value": "WAFTEST;echo WAFTEST"
+        },
+        {
+          "id": "substitution",
+          "name": "Command substitution marker",
+          "value": "$(echo WAFTEST)"
+        },
+        {
+          "id": "ampersand",
+          "name": "Ampersand marker",
+          "value": "WAFTEST&echo WAFTEST"
+        }
+      ],
+      "placements": [
+        {
+          "id": "query",
+          "name": "Query parameter",
+          "placement": "query",
+          "parameter": "value",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.php-markers",
+      "name": "PHP-related inert marker",
+      "values": [
+        {
+          "id": "filter",
+          "name": "PHP filter URI",
+          "value": "php://filter/resource=waf-test.txt"
+        },
+        {
+          "id": "code",
+          "name": "PHP code-shaped text",
+          "value": "<?php echo \"WAFTEST\"; ?>"
+        }
+      ],
+      "placements": [
+        {
+          "id": "query",
+          "name": "Query parameter",
+          "placement": "query",
+          "parameter": "value",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "ordinary"
+      },
+      "enabled": true
+    },
+    {
+      "id": "matrix.absolute-path",
+      "name": "Absolute-path-shaped text",
+      "values": [
+        {
+          "id": "unix-passwd",
+          "name": "Unix absolute path",
+          "value": "/etc/passwd"
+        }
+      ],
+      "placements": [
+        {
+          "id": "query",
+          "name": "Query parameter",
+          "placement": "query",
+          "parameter": "file",
+          "method": "GET",
+          "safe_methods": [
+            "GET"
+          ]
+        }
+      ],
+      "providers": [],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "control_value": "waf-test.txt"
       },
       "enabled": true
     }

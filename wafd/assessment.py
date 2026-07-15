@@ -14,18 +14,23 @@ from .models import OriginAssessment
 class AssessmentStore(object):
     """Maintain bounded current evidence and produce human-readable details."""
 
-    def __init__(self, rules, threshold=0.60, max_evidence=100):
+    def __init__(self, rules, threshold=0.60, max_evidence=5000):
         self.engine = ConfidenceEngine(rules, threshold)
         self.max_evidence = int(max_evidence)
         self.assessments = {}
 
     def observe(self, origin, evidence, representative_message=None):
         assessment = self.assessments.setdefault(origin, OriginAssessment(origin))
-        known = set(item.rule_id for item in assessment.evidence)
+        # A rule contributes only once per origin. This prevents frequently
+        # observed passive headers from overwhelming distinct behavioural
+        # evidence and keeps the stored assessment bounded.
+        known = set((item.rule_id, item.characteristic)
+                    for item in assessment.evidence)
         for item in evidence:
-            if item.rule_id not in known and len(assessment.evidence) < self.max_evidence:
+            evidence_key = (item.rule_id, item.characteristic)
+            if evidence_key not in known and len(assessment.evidence) < self.max_evidence:
                 assessment.evidence.append(item)
-                known.add(item.rule_id)
+                known.add(evidence_key)
         if representative_message is not None:
             assessment.representative_message = representative_message
         return assessment
@@ -35,6 +40,8 @@ class AssessmentStore(object):
         score, products = self.engine.score(assessment.evidence)
         product_names = sorted(products, key=lambda product: products[product], reverse=True)
         state = "WAF suspected" if score >= self.engine.threshold else "No WAF indicators detected"
+        # Every value that can originate in HTTP traffic is escaped before it
+        # reaches Burp's HTML issue renderer.
         safe_origin = html_escape(str(origin), quote=True)
         lines = ["<p><b>%s</b></p>" % html_escape(state),
                  "<p>Origin: %s<br>Confidence: %.0f%% (threshold %.0f%%)</p>" %
@@ -48,14 +55,22 @@ class AssessmentStore(object):
                 html_escape(str(action), quote=True) for action in actions))
         if assessment.evidence:
             lines.append("<p>Detections:</p><ul>%s</ul>" % "".join(
-                "<li>%s: %s</li>" % (html_escape(str(item.rule_id), quote=True),
-                                      html_escape(str(item.detail), quote=True))
+                "<li>%s%s%s: %s</li>" % (
+                    html_escape(str(item.rule_id), quote=True),
+                    (" [%s]" % html_escape(str(item.characteristic), quote=True))
+                    if item.characteristic else "",
+                    (" (%s)" % html_escape(str(item.classification), quote=True))
+                    if item.classification else "",
+                    html_escape(str(item.detail), quote=True))
                 for item in assessment.evidence))
         else:
             lines.append("<p>No distinct detection rules have matched yet.</p>")
         # This compact marker makes reload recovery possible without retaining
         # complete request bodies or serialising arbitrary Python objects.
-        marker = json.dumps(sorted(item.rule_id for item in assessment.evidence),
+        marker = json.dumps(sorted(
+            "%s:%s" % (item.rule_id, item.characteristic)
+            if item.characteristic else item.rule_id
+            for item in assessment.evidence),
                             separators=(",", ":"))
         lines.append("<p>Evidence IDs: %s</p>" % marker)
         return "".join(lines)
