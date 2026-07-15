@@ -1,6 +1,7 @@
 """Burp-independent response matching."""
 
 from .models import Evidence
+from difflib import SequenceMatcher
 
 
 class ResponseDetector(object):
@@ -43,6 +44,28 @@ class ResponseDetector(object):
                 matched = (int(baseline.get("status", 0) or 0) != status or
                            str(baseline.get("body", ""))[:512] != str(response.get("body", ""))[:512])
                 detail = "probe response differs from baseline"
+            elif kind == "status_transition" and baseline is not None:
+                blocked = [int(value) for value in matcher.get("blocked", [])]
+                before = int(baseline.get("status", 0) or 0)
+                matched = before not in blocked and status in blocked
+                detail = "baseline HTTP %d changed to blocked HTTP %d" % (before, status)
+            elif kind == "body_similarity_drop" and baseline is not None:
+                before = str(baseline.get("body", ""))[:4096]
+                similarity = SequenceMatcher(None, before, str(response.get("body", ""))[:4096]).ratio()
+                matched = similarity < float(matcher.get("below", 0.5))
+                detail = "probe body similarity fell to %.0f%%" % (similarity * 100)
+            elif kind == "header_delta" and baseline is not None:
+                before = set(str(key).lower() for key in baseline.get("headers", {}))
+                added = set(headers) - before
+                matched = len(added) >= int(matcher.get("minimum", 1))
+                detail = "probe added response headers: %s" % ", ".join(sorted(added))
+            elif kind == "challenge_transition" and baseline is not None:
+                challenge_terms = [str(term).lower() for term in matcher.get("terms", [])]
+                before_body = str(baseline.get("body", "")).lower()
+                challenge_body = any(term in body and term not in before_body for term in challenge_terms)
+                challenge_status = status in [int(value) for value in matcher.get("statuses", [])]
+                matched = challenge_body or challenge_status
+                detail = "probe triggered a challenge or verification response"
             if matched:
                 product = next((tag for tag in rule.tags if tag != "generic" and tag != "product"), "")
                 found.append(Evidence(rule.rule_id, origin, detail, product, source))
