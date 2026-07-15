@@ -84,6 +84,15 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(crs[0].product, "modsecurity")
         self.assertEqual(conceal[0].rule_id, "conceal")
 
+    def test_challenge_status_requires_transition(self):
+        catalogue = RuleCatalogue.from_json('{"rules": [{"id":"challenge","name":"Challenge",'
+            '"evidence_group":"challenge","weight":20,"matcher":{"kind":"challenge_transition",'
+            '"statuses":[403],"terms":["challenge"]}}]}')
+        detector = ResponseDetector(catalogue)
+        evidence = detector.detect("https://x", {"status": 403, "headers": {}, "body": "same"},
+                                   baseline={"status": 403, "headers": {}, "body": "same"})
+        self.assertEqual(evidence, [])
+
 
 if __name__ == "__main__":
     unittest.main()

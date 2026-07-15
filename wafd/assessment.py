@@ -2,6 +2,11 @@
 
 import json
 
+try:
+    from html import escape as html_escape
+except ImportError:  # Jython 2.7 compatibility.
+    from cgi import escape as html_escape
+
 from .confidence import ConfidenceEngine
 from .models import OriginAssessment
 
@@ -30,17 +35,21 @@ class AssessmentStore(object):
         score, products = self.engine.score(assessment.evidence)
         product_names = sorted(products, key=lambda product: products[product], reverse=True)
         state = "WAF suspected" if score >= self.engine.threshold else "No WAF indicators detected"
-        lines = ["<p><b>%s</b></p>" % state,
+        safe_origin = html_escape(str(origin), quote=True)
+        lines = ["<p><b>%s</b></p>" % html_escape(state),
                  "<p>Origin: %s<br>Confidence: %.0f%% (threshold %.0f%%)</p>" %
-                 (origin, score * 100, self.engine.threshold * 100)]
+                 (safe_origin, score * 100, self.engine.threshold * 100)]
         if product_names:
-            lines.append("<p>Edge/provider signals: %s</p>" % ", ".join(product_names))
+            lines.append("<p>Edge/provider signals: %s</p>" % ", ".join(
+                html_escape(str(product), quote=True) for product in product_names))
         actions = sorted(set(item.action for item in assessment.evidence if item.action))
         if actions:
-            lines.append("<p>Observed security actions: %s</p>" % ", ".join(actions))
+            lines.append("<p>Observed security actions: %s</p>" % ", ".join(
+                html_escape(str(action), quote=True) for action in actions))
         if assessment.evidence:
             lines.append("<p>Detections:</p><ul>%s</ul>" % "".join(
-                "<li>%s: %s</li>" % (item.rule_id, item.detail)
+                "<li>%s: %s</li>" % (html_escape(str(item.rule_id), quote=True),
+                                      html_escape(str(item.detail), quote=True))
                 for item in assessment.evidence))
         else:
             lines.append("<p>No distinct detection rules have matched yet.</p>")

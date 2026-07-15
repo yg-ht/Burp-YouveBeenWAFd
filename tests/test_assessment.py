@@ -20,6 +20,13 @@ class AssessmentTests(unittest.TestCase):
         self.assertIn("cloudflare", detail)
         self.assertIn("Evidence IDs: [\"a\"]", detail)
 
+    def test_dynamic_evidence_is_html_escaped(self):
+        store = AssessmentStore([Rule("r", "Rule", "g", 10)])
+        store.observe("https://x", [Evidence("r", "https://x", "<script>alert(1)</script>")])
+        detail = store.detail("https://x")
+        self.assertNotIn("<script>", detail)
+        self.assertIn("&lt;script&gt;", detail)
+
 
 if __name__ == "__main__":
     unittest.main()

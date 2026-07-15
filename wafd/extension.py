@@ -36,7 +36,7 @@ class WafExtension(object):
         self.assessments = AssessmentStore(self.catalogue.rules, self.configuration.threshold)
         # Non-GET probe profiles are permitted only when their catalogue entry
         # explicitly allows the method; the target policy controls the path.
-        self.probes = ProbePlanner(self.configuration.max_probes, allow_non_idempotent=True)
+        self.probes = ProbePlanner(self.configuration.max_probes)
         callbacks.registerHttpListener(self)
         callbacks.registerScannerCheck(self)
         callbacks.registerContextMenuFactory(self)
@@ -141,7 +141,7 @@ class WafExtension(object):
         if not isinstance(body, str):
             body = body.decode("utf-8", "replace")
         first_line = raw_response.splitlines()[0] if raw_response.splitlines() else ""
-        match = re.match(r"HTTP/(\\d(?:\\.\\d)?)", str(first_line))
+        match = re.match(r"HTTP/(\d(?:\.\d)?)", str(first_line))
         return build_fingerprint(response_info.getStatusCode(), headers, body[:1024 * 1024],
                                  match.group(1) if match else "")
 

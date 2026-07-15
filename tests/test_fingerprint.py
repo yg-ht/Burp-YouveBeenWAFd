@@ -1,4 +1,5 @@
 import unittest
+import re
 
 from wafd.fingerprint import build_fingerprint
 
@@ -17,6 +18,10 @@ class FingerprintTests(unittest.TestCase):
     def test_transport_state_is_retained(self):
         fingerprint = build_fingerprint(0, {}, "", connection_state="reset")
         self.assertEqual(fingerprint["connection_state"], "reset")
+
+    def test_http_version_status_line_pattern_extracts_version(self):
+        match = re.match(r"HTTP/(\d(?:\.\d)?)", "HTTP/1.1 403 Forbidden")
+        self.assertEqual(match.group(1), "1.1")
 
 
 if __name__ == "__main__":

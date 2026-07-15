@@ -11,7 +11,9 @@ class ProbePlannerTests(unittest.TestCase):
         self.assertIn("' OR '1'='1", probes)
 
     def test_non_idempotent_methods_are_disabled_by_default(self):
-        self.assertEqual(ProbePlanner().plan("POST", "query"), [])
+        probes = ProbePlanner().plan_entries("POST", "query")
+        self.assertTrue(probes)
+        self.assertTrue(all("POST" in probe.safe_methods for probe in probes))
 
     def test_sensitive_insertion_points_are_skipped(self):
         self.assertEqual(ProbePlanner().plan("GET", "Cookie"), [])

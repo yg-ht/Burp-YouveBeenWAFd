@@ -60,16 +60,13 @@ class ProbeCatalogue(object):
 class ProbePlanner(object):
     """Plan bounded marker payloads, refusing unsafe methods and locations."""
 
-    def __init__(self, max_probes=3, allow_non_idempotent=False, catalogue=None):
+    def __init__(self, max_probes=3, catalogue=None):
         self.max_probes = max(0, min(int(max_probes), 20))
-        self.allow_non_idempotent = bool(allow_non_idempotent)
         self.catalogue = catalogue or ProbeCatalogue.bundled()
 
     def plan(self, method, insertion_point_name="", providers=None):
         """Return raw values; Burp insertion points perform URL/body encoding."""
         method = str(method).upper()
-        if method not in ("GET", "HEAD", "OPTIONS") and not self.allow_non_idempotent:
-            return []
         name = str(insertion_point_name).lower()
         if any(term in name for term in ("cookie", "authorization", "header")):
             return []
@@ -85,8 +82,6 @@ class ProbePlanner(object):
     def plan_entries(self, method, insertion_point_name="", providers=None):
         """Return catalogue entries so adapters can apply profile metadata."""
         method = str(method).upper()
-        if method not in ("GET", "HEAD", "OPTIONS") and not self.allow_non_idempotent:
-            return []
         name = str(insertion_point_name).lower()
         if any(term in name for term in ("cookie", "authorization", "header")):
             return []
@@ -95,7 +90,10 @@ class ProbePlanner(object):
         for probe in self.catalogue.probes:
             if not probe.enabled:
                 continue
-            if method not in probe.safe_methods and not self.allow_non_idempotent:
+            # Method eligibility is configured per probe. There is no global
+            # override which could accidentally send a GET-only payload in a
+            # POST, PUT, PATCH or DELETE request.
+            if method not in probe.safe_methods:
                 continue
             if provider_filter and not provider_filter.intersection(probe.providers):
                 continue

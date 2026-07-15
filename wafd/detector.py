@@ -80,7 +80,9 @@ class ResponseDetector(object):
                 challenge_terms = [str(term).lower() for term in matcher.get("terms", [])]
                 before_body = str(baseline.get("body", "")).lower()
                 challenge_body = any(term in body and term not in before_body for term in challenge_terms)
-                challenge_status = status in [int(value) for value in matcher.get("statuses", [])]
+                challenge_status = (status in [int(value) for value in matcher.get("statuses", [])]
+                                    and int(baseline.get("status", 0) or 0) not in
+                                    [int(value) for value in matcher.get("statuses", [])])
                 matched = challenge_body or challenge_status
                 detail = "probe triggered a challenge or verification response"
             elif kind == "strong_header":
