@@ -42,7 +42,7 @@ class RuleCatalogue(object):
             raise ValueError("rule matcher must be an object")
         return Rule(rule_id, str(item["name"]), str(item["evidence_group"]),
                     weight, tuple(item.get("tags", [])), matcher,
-                    bool(item.get("enabled", True)), bool(item.get("active", False)))
+                    bool(item.get("enabled", True)))
 
     def _validate_unique_ids(self):
         ids = [rule.rule_id for rule in self.rules]

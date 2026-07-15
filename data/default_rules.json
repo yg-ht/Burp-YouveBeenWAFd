@@ -1,0 +1,597 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "id": "generic.block-status",
+      "name": "Blocked status (weak standalone signal)",
+      "evidence_group": "status",
+      "weight": 4,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "status",
+        "values": [
+          403,
+          405,
+          406,
+          413,
+          429,
+          503
+        ]
+      }
+    },
+    {
+      "id": "generic.challenge-body",
+      "name": "Challenge body (weak standalone signal)",
+      "evidence_group": "body",
+      "weight": 5,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "body_terms",
+        "values": [
+          "access denied",
+          "request blocked",
+          "captcha",
+          "security challenge"
+        ]
+      }
+    },
+    {
+      "id": "generic.status-transition",
+      "name": "Benign-to-blocked probe transition",
+      "evidence_group": "behaviour-block",
+      "weight": 35,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "status_transition",
+        "blocked": [
+          403,
+          406,
+          429,
+          503
+        ]
+      }
+    },
+    {
+      "id": "generic.rate-limit-transition",
+      "name": "Benign-to-rate-limited transition",
+      "evidence_group": "behaviour-rate-limit",
+      "weight": 18,
+      "tags": [
+        "generic",
+        "rate_limit"
+      ],
+      "matcher": {
+        "kind": "status_transition",
+        "blocked": [
+          429
+        ]
+      }
+    },
+    {
+      "id": "generic.concealed-status-transition",
+      "name": "Benign-to-concealed denial transition",
+      "evidence_group": "behaviour-concealment",
+      "weight": 18,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "status_transition",
+        "blocked": [
+          404,
+          502
+        ]
+      }
+    },
+    {
+      "id": "generic.size-rejection",
+      "name": "Probe request-size rejection",
+      "evidence_group": "behaviour-size",
+      "weight": 5,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "status",
+        "values": [
+          413
+        ]
+      }
+    },
+    {
+      "id": "generic.challenge-transition",
+      "name": "Probe-triggered challenge transition",
+      "evidence_group": "behaviour-challenge",
+      "weight": 32,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "challenge_transition",
+        "statuses": [
+          202,
+          403,
+          429
+        ],
+        "terms": [
+          "captcha",
+          "challenge",
+          "verify you are human",
+          "access denied"
+        ]
+      }
+    },
+    {
+      "id": "generic.body-differential",
+      "name": "Probe response body divergence",
+      "evidence_group": "behaviour-body",
+      "weight": 22,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "body_similarity_drop",
+        "below": 0.50
+      }
+    },
+    {
+      "id": "generic.body-hash-change",
+      "name": "Probe response body hash change",
+      "evidence_group": "behaviour-body-hash",
+      "weight": 14,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "body_hash_change"
+      }
+    },
+    {
+      "id": "generic.header-differential",
+      "name": "Probe-added response headers",
+      "evidence_group": "behaviour-headers",
+      "weight": 12,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "header_delta",
+        "minimum": 1
+      }
+    },
+    {
+      "id": "generic.cookie-differential",
+      "name": "Probe-added response cookies",
+      "evidence_group": "behaviour-cookies",
+      "weight": 16,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "cookie_delta",
+        "minimum": 1
+      }
+    },
+    {
+      "id": "generic.protocol-differential",
+      "name": "Probe HTTP-version transition",
+      "evidence_group": "behaviour-protocol",
+      "weight": 10,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "http_version_change"
+      }
+    },
+    {
+      "id": "generic.transport-reset",
+      "name": "Probe transport reset",
+      "evidence_group": "behaviour-transport",
+      "weight": 10,
+      "tags": [
+        "generic",
+        "reset"
+      ],
+      "matcher": {
+        "kind": "connection_state",
+        "values": [
+          "reset",
+          "no-response"
+        ]
+      }
+    },
+    {
+      "id": "cloudflare.header",
+      "name": "Cloudflare response marker (corroboration only)",
+      "evidence_group": "vendor-header-cloudflare",
+      "weight": 2,
+      "tags": [
+        "cloudflare",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "server",
+        "contains": "cloudflare"
+      }
+    },
+    {
+      "id": "cloudflare.ray-id",
+      "name": "Cloudflare edge Ray ID (corroboration only)",
+      "evidence_group": "vendor-header-cloudflare",
+      "weight": 2,
+      "tags": [
+        "cloudflare",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "cf-ray",
+        "contains": ""
+      }
+    },
+    {
+      "id": "akamai.header",
+      "name": "Akamai response marker (corroboration only)",
+      "evidence_group": "vendor-header-akamai",
+      "weight": 2,
+      "tags": [
+        "akamai",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-akamai-transformed",
+        "contains": ""
+      }
+    },
+    {
+      "id": "imperva.header",
+      "name": "Imperva response marker (corroboration only)",
+      "evidence_group": "vendor-header-imperva",
+      "weight": 2,
+      "tags": [
+        "imperva",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-iinfo",
+        "contains": ""
+      }
+    },
+    {
+      "id": "sucuri.header",
+      "name": "Sucuri response marker (corroboration only)",
+      "evidence_group": "vendor-header-sucuri",
+      "weight": 2,
+      "tags": [
+        "sucuri",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-sucuri-id",
+        "contains": ""
+      }
+    },
+    {
+      "id": "aws.header",
+      "name": "AWS response marker (corroboration only)",
+      "evidence_group": "vendor-header-aws",
+      "weight": 1,
+      "tags": [
+        "aws-waf",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-amzn-requestid",
+        "contains": ""
+      }
+    },
+    {
+      "id": "azure.header",
+      "name": "Azure response marker (corroboration only)",
+      "evidence_group": "vendor-header-azure",
+      "weight": 1,
+      "tags": [
+        "azure-waf",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-azure-ref",
+        "contains": ""
+      }
+    },
+    {
+      "id": "gcp.header",
+      "name": "Google response marker (corroboration only)",
+      "evidence_group": "vendor-header-gcp",
+      "weight": 1,
+      "tags": [
+        "google-cloud-armor",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-cloud-trace-context",
+        "contains": ""
+      }
+    },
+    {
+      "id": "fastly.header",
+      "name": "Fastly response marker (corroboration only)",
+      "evidence_group": "vendor-header-fastly",
+      "weight": 1,
+      "tags": [
+        "fastly",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-served-by",
+        "contains": ""
+      }
+    },
+    {
+      "id": "f5.cookie",
+      "name": "F5 cookie marker (corroboration only)",
+      "evidence_group": "vendor-cookie-f5",
+      "weight": 2,
+      "tags": [
+        "f5",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "set-cookie",
+        "contains": "bigipserver"
+      }
+    },
+    {
+      "id": "fortiweb.header",
+      "name": "FortiWeb marker (corroboration only)",
+      "evidence_group": "vendor-header-fortiweb",
+      "weight": 2,
+      "tags": [
+        "fortiweb",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "server",
+        "contains": "fortiweb"
+      }
+    },
+    {
+      "id": "barracuda.header",
+      "name": "Barracuda marker (corroboration only)",
+      "evidence_group": "vendor-header-barracuda",
+      "weight": 2,
+      "tags": [
+        "barracuda",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "server",
+        "contains": "barracuda"
+      }
+    },
+    {
+      "id": "radware.header",
+      "name": "Radware marker (corroboration only)",
+      "evidence_group": "vendor-header-radware",
+      "weight": 2,
+      "tags": [
+        "radware",
+        "product"
+      ],
+      "matcher": {
+        "kind": "header",
+        "name": "x-sl-compstate",
+        "contains": ""
+      }
+    },
+    {
+      "id": "modsecurity.body",
+      "name": "ModSecurity block marker (corroboration only)",
+      "evidence_group": "vendor-body-modsecurity",
+      "weight": 3,
+      "tags": [
+        "modsecurity",
+        "product"
+      ],
+      "matcher": {
+        "kind": "body_terms",
+        "values": [
+          "mod_security",
+          "modsecurity"
+        ]
+      }
+    },
+    {
+      "id": "generic.probe-differential",
+      "name": "Probe response differs from baseline",
+      "evidence_group": "active-differential",
+      "weight": 8,
+      "tags": [
+        "generic"
+      ],
+      "matcher": {
+        "kind": "active_differential"
+      }
+    },
+    {
+      "id": "cloudflare.challenge",
+      "name": "Cloudflare managed challenge",
+      "evidence_group": "action-challenge-cloudflare",
+      "weight": 100,
+      "tags": [
+        "cloudflare",
+        "product",
+        "challenge"
+      ],
+      "matcher": {
+        "kind": "strong_header",
+        "name": "cf-mitigated",
+        "contains": "challenge"
+      }
+    },
+    {
+      "id": "aws.challenge",
+      "name": "AWS WAF challenge action",
+      "evidence_group": "action-challenge-aws",
+      "weight": 100,
+      "tags": [
+        "aws-waf",
+        "product",
+        "challenge"
+      ],
+      "matcher": {
+        "kind": "strong_header",
+        "name": "x-amzn-waf-action",
+        "contains": "challenge"
+      }
+    },
+    {
+      "id": "aws.captcha",
+      "name": "AWS WAF CAPTCHA action",
+      "evidence_group": "action-captcha-aws",
+      "weight": 100,
+      "tags": [
+        "aws-waf",
+        "product",
+        "captcha"
+      ],
+      "matcher": {
+        "kind": "strong_header",
+        "name": "x-amzn-waf-action",
+        "contains": "captcha"
+      }
+    },
+    {
+      "id": "azure.frontdoor-block",
+      "name": "Azure Front Door WAF block",
+      "evidence_group": "action-block-azure",
+      "weight": 85,
+      "tags": [
+        "azure-waf",
+        "product",
+        "block"
+      ],
+      "matcher": {
+        "kind": "header_body",
+        "header": "x-azure-ref",
+        "header_contains": "",
+        "body_terms": [
+          "the request is blocked"
+        ]
+      }
+    },
+    {
+      "id": "azure.gateway-block",
+      "name": "Azure Application Gateway WAF block",
+      "evidence_group": "action-block-azure-gateway",
+      "weight": 85,
+      "tags": [
+        "azure-waf",
+        "product",
+        "block"
+      ],
+      "matcher": {
+        "kind": "body_regex",
+        "pattern": "microsoft-azure-application-gateway/v2.*(transaction|request)"
+      }
+    },
+    {
+      "id": "f5.support-id",
+      "name": "F5 WAF rejection with support ID",
+      "evidence_group": "action-block-f5",
+      "weight": 85,
+      "tags": [
+        "f5",
+        "product",
+        "block"
+      ],
+      "matcher": {
+        "kind": "body_regex",
+        "pattern": "requested url was rejected.*support id is:\\s*[0-9]{8,}"
+      }
+    },
+    {
+      "id": "akamai.edge-reference",
+      "name": "Akamai edge denial reference",
+      "evidence_group": "edge-denial-akamai",
+      "weight": 80,
+      "tags": [
+        "akamai",
+        "product",
+        "block"
+      ],
+      "matcher": {
+        "kind": "header_body",
+        "header": "server",
+        "header_contains": "akamai ghost",
+        "body_regex": "reference #[0-9a-f.]+"
+      }
+    },
+    {
+      "id": "imperva.incident",
+      "name": "Imperva incident block page",
+      "evidence_group": "action-block-imperva",
+      "weight": 90,
+      "tags": [
+        "imperva",
+        "product",
+        "block"
+      ],
+      "matcher": {
+        "kind": "body_regex",
+        "pattern": "(request unsuccessful|incapsula incident id)"
+      }
+    },
+    {
+      "id": "modsecurity.crs-visible",
+      "name": "Visible OWASP CRS rule identifier",
+      "evidence_group": "action-block-modsecurity",
+      "weight": 100,
+      "tags": [
+        "modsecurity",
+        "product",
+        "block"
+      ],
+      "matcher": {
+        "kind": "body_regex",
+        "pattern": "(?:941100|941110|941160|949110|980130)"
+      }
+    },
+    {
+      "id": "fortiweb.reset",
+      "name": "FortiWeb connection reset after probe",
+      "evidence_group": "action-reset-fortiweb",
+      "weight": 10,
+      "tags": [
+        "fortiweb",
+        "product",
+        "reset"
+      ],
+      "matcher": {
+        "kind": "connection_state",
+        "values": [
+          "reset",
+          "no-response"
+        ]
+      }
+    }
+  ]
+}

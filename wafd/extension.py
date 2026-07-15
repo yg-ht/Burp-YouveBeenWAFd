@@ -45,7 +45,7 @@ class WafExtension(object):
 
     def _load_default_catalogue(self):
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                            "rules", "default_rules.json")
+                            "data", "default_rules.json")
         with open(path, "r") as source:
             return RuleCatalogue.from_json(source.read())
 

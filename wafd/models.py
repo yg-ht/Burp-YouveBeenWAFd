@@ -18,7 +18,6 @@ if dataclass:
         tags: tuple = field(default_factory=tuple)
         matcher: dict = field(default_factory=dict)
         enabled: bool = True
-        active: bool = False
 
     @dataclass(frozen=True)
     class Evidence:
@@ -42,11 +41,11 @@ if dataclass:
 else:
     class Rule(object):
         def __init__(self, rule_id, name, evidence_group, weight, tags=(), matcher=None,
-                     enabled=True, active=False):
+                     enabled=True):
             self.rule_id, self.name = rule_id, name
             self.evidence_group, self.weight = evidence_group, float(weight)
             self.tags, self.matcher = tuple(tags), matcher or {}
-            self.enabled, self.active = bool(enabled), bool(active)
+            self.enabled = bool(enabled)
 
     class Evidence(object):
         def __init__(self, rule_id, origin, detail, product="", source="passive", action=""):

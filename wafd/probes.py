@@ -52,7 +52,7 @@ class ProbeCatalogue(object):
 
     @classmethod
     def bundled(cls):
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rules", "probes.json")
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "probes.json")
         with open(path, "r") as source:
             return cls.from_json(source.read())
 
