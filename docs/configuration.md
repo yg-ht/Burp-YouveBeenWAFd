@@ -8,7 +8,8 @@ Configuration is split between:
 
 The **WAF Detector** suite tab exposes **Settings**, **Detection Rules**, and
 **Active Probes**. Saving validates the complete settings object before any
-live state is changed.
+live state is changed. Their custom tab headers retain natural title widths,
+bounded from 90 to 180 pixels, instead of stretching across the full tab bar.
 
 Settings are grouped into **Detection**, **Active probing**, and **Size and
 inspection limits**. GridBag constraints allow horizontal growth but prohibit
@@ -43,7 +44,7 @@ The extension configuration schema is version 1.
 | `in_scope_only` | Boolean | `true` | Restrict passive monitoring to Burp scope. |
 | `max_probes` | Integer or null | `null` | Blank/null means unlimited; otherwise clamped to 0–1,000. Zero sends none. |
 | `enabled` | Boolean | `true` | Enables passive response monitoring. |
-| `non_get_target` | String | `root` | `root` or `selected`. |
+| `non_get_target` | String | `root` | `root` sends constructed non-GET probes to `/`; `selected` preserves the actively selected request path. |
 | `body_test_threshold` | Integer | `8192` | Body-size research threshold in bytes. |
 | `header_test_threshold` | Integer | `4096` | Single/total-header research threshold in bytes. |
 | `header_count_test_threshold` | Integer | `64` | Header-count research threshold, range 1–500. |
@@ -54,6 +55,11 @@ Body, header, and inspection thresholds must be positive and strictly below
 `size_hard_max`. Size probes use gradual 50% and 75% requests plus immediately
 below/above variants. The hard maximum is enforced by the builder even when a
 catalogue profile asks for a larger request.
+
+The **Path for constructed non-GET probes** dropdown displays **Root path (/)**
+for the persisted `root` value and **Selected request path** for `selected`.
+Its tooltip repeats the targeting behaviour. Display labels are never written
+to saved configuration, preserving schema-version-1 compatibility.
 
 The adapter stores the following shape under Burp's extension-setting key
 `configuration`:

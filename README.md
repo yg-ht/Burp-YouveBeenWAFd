@@ -78,9 +78,10 @@ coverage or set a maximum under **Settings**.
 
 ## Targeting and operational assumptions
 
-Constructed non-GET requests use `/` by default. Selecting `selected` preserves
-the chosen path instead. GET-like placements preserve the selected target
-unless a profile declares an explicit endpoint.
+Constructed non-GET requests use `/` by default. The `selected` policy preserves
+the chosen path instead. In the UI these policies are labelled **Root path
+(/)** and **Selected request path**. GET-like placements preserve the selected
+target unless a profile declares an explicit endpoint.
 
 The extension cannot determine whether `/` is inert and does not enforce an
 application-specific safety contract. Probe values are attack-shaped text, not
