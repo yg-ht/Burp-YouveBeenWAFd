@@ -22,3 +22,34 @@ class BurpExtender(IBurpExtender, IHttpListener, IScannerCheck,
         # Keep this method directly on the exported class.  Burp validates the
         # IBurpExtender contract before invoking any listener registrations.
         return WafExtension.registerExtenderCallbacks(self, callbacks)
+
+    def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
+        """Delegate ``IHttpListener`` traffic notifications."""
+        return WafExtension.processHttpMessage(
+            self, toolFlag, messageIsRequest, messageInfo)
+
+    def doPassiveScan(self, baseRequestResponse):
+        """Delegate ``IScannerCheck`` passive analysis."""
+        return WafExtension.doPassiveScan(self, baseRequestResponse)
+
+    def doActiveScan(self, baseRequestResponse, insertionPoint):
+        """Delegate ``IScannerCheck`` active analysis."""
+        return WafExtension.doActiveScan(
+            self, baseRequestResponse, insertionPoint)
+
+    def consolidateDuplicateIssues(self, existingIssue, newIssue):
+        """Delegate ``IScannerCheck`` duplicate consolidation."""
+        return WafExtension.consolidateDuplicateIssues(
+            self, existingIssue, newIssue)
+
+    def createMenuItems(self, invocation):
+        """Delegate ``IContextMenuFactory`` menu construction."""
+        return WafExtension.createMenuItems(self, invocation)
+
+    def getTabCaption(self):
+        """Delegate the ``ITab`` caption requested by Burp."""
+        return WafExtension.getTabCaption(self)
+
+    def getUiComponent(self):
+        """Delegate the ``ITab`` Swing component requested by Burp."""
+        return WafExtension.getUiComponent(self)
