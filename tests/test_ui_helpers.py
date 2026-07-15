@@ -1,10 +1,12 @@
 """Tests for Burp-independent UI filtering and bulk-selection behaviour."""
 
+from pathlib import Path
 import unittest
 
 from wafd.extension import WafExtension
 from wafd.models import Rule
-from wafd.probes import Probe
+from wafd.probes import Probe, ProbeCatalogue
+from wafd.rules import RuleCatalogue
 
 
 class _Checkbox(object):
@@ -25,6 +27,65 @@ class _Checkbox(object):
 
 
 class CatalogueFilterTests(unittest.TestCase):
+    def test_rules_are_grouped_by_provider_or_generic_behaviour(self):
+        cloudflare = Rule("cf", "Cloudflare", "edge", 10,
+                          ("cloudflare", "product"))
+        generic = Rule("status", "Status", "status", 5, ("generic",))
+
+        self.assertEqual("Cloudflare", WafExtension._rule_group(cloudflare))
+        self.assertEqual(
+            "Generic behavioural rules", WafExtension._rule_group(generic))
+
+    def test_probes_are_grouped_by_function_and_provider_profile(self):
+        sql = Probe("marker", (), (), "matrix.sqli.boolean.query", "SQL")
+        multipart = Probe(
+            "marker", (), (), "matrix.multipart.xss-marker.field", "Multipart")
+        provider = Probe(
+            "marker", ("cloudflare",), (), "cloudflare.challenge-profile", "Cloudflare")
+
+        self.assertEqual("SQL injection", WafExtension._probe_group(sql))
+        self.assertEqual(
+            "Multipart, cookies and headers", WafExtension._probe_group(multipart))
+        self.assertEqual(
+            "Provider-specific profiles", WafExtension._probe_group(provider))
+
+    def test_matrix_provider_associations_do_not_override_functional_group(self):
+        probe = Probe(
+            "marker", ("cloudflare", "aws-waf"), ("block",),
+            "matrix.sqli.boolean.query", "SQL associated with providers")
+
+        self.assertEqual("SQL injection", WafExtension._probe_group(probe))
+
+    def test_grouped_rows_follow_declared_order_and_preserve_every_row(self):
+        rows = [
+            (Probe("x", ("cloudflare",), (), "cloudflare.profile", "Provider"),
+             _Checkbox()),
+            (Probe("x", (), (), "matrix.xss.script.query", "XSS"), _Checkbox()),
+            (Probe("x", (), (), "matrix.sqli.boolean.query", "SQL"), _Checkbox()),
+        ]
+
+        grouped = WafExtension._group_catalogue_rows(
+            rows, WafExtension._probe_group, WafExtension.PROBE_GROUP_ORDER)
+
+        self.assertEqual(
+            ["SQL injection", "Cross-site scripting", "Provider-specific profiles"],
+            [label for label, unused_rows in grouped])
+        self.assertEqual(3, sum(len(group_rows) for unused_label, group_rows in grouped))
+
+    def test_bundled_catalogues_have_no_uncategorised_entries(self):
+        project_root = Path(__file__).resolve().parents[1]
+        rules = RuleCatalogue.from_json(
+            (project_root / "data" / "default_rules.json").read_text()).rules
+        probes = ProbeCatalogue.bundled().probes
+
+        rule_groups = [WafExtension._rule_group(rule) for rule in rules]
+        probe_groups = [WafExtension._probe_group(probe) for probe in probes]
+
+        self.assertEqual(41, len(rule_groups))
+        self.assertEqual(213, len(probe_groups))
+        self.assertNotIn("Other rules", rule_groups)
+        self.assertNotIn("Other generic probes", probe_groups)
+
     def test_filter_requires_every_case_insensitive_search_term(self):
         values = ("Cloudflare challenge", "cloudflare.challenge", "CF-Mitigated")
 

@@ -129,17 +129,19 @@ Before release, manually verify:
 2. Settings, rule overrides, and probe overrides persist across reload.
 3. All three UI tabs render and remain responsive with 213 probe controls;
    settings and checkbox rows retain natural font-relative heights.
-4. Rule and probe filters match documented metadata, update visible counts,
-   and limit bulk enable/disable actions to visible rows.
-5. Passive in-scope/out-of-scope behaviour matches the checkbox.
-6. Scanner and context-menu requests appear correctly in Burp's extension
+4. Rule/provider and probe/function groups start collapsed; expand/collapse-all
+   controls, filter-driven expansion, and hiding empty groups behave correctly.
+5. Rule and probe filters match documented metadata, update matched counts,
+   and limit bulk enable/disable actions to matching rows.
+6. Passive in-scope/out-of-scope behaviour matches the checkbox.
+7. Scanner and context-menu requests appear correctly in Burp's extension
    traffic view.
-7. Constructed non-GET requests use `/` or the selected target as configured.
-8. Content types, multipart boundaries, duplicate parameters/cookies, and
+8. Constructed non-GET requests use `/` or the selected target as configured.
+9. Content types, multipart boundaries, duplicate parameters/cookies, and
    `Content-Length` are correct on the wire.
-9. HTTP/1.1 and HTTP/2 responses retain a usable version field.
-10. Timeout/reset behaviour is represented as Burp exposes it on the platform.
-11. One current issue remains after a large active matrix.
+10. HTTP/1.1 and HTTP/2 responses retain a usable version field.
+11. Timeout/reset behaviour is represented as Burp exposes it on the platform.
+12. One current issue remains after a large active matrix.
 
 ## Known limitations
 
