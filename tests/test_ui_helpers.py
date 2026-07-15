@@ -43,6 +43,12 @@ class CatalogueFilterTests(unittest.TestCase):
         self.assertEqual(144, WafExtension._tab_header_width(120))
         self.assertEqual(180, WafExtension._tab_header_width(500))
 
+    def test_tab_layout_prevents_look_and_feel_from_filling_tab_bar(self):
+        properties = WafExtension._tab_layout_properties()
+
+        self.assertEqual("leading", properties["JTabbedPane.tabAreaAlignment"])
+        self.assertEqual("preferred", properties["JTabbedPane.tabWidthMode"])
+
     def test_rules_are_grouped_by_provider_or_generic_behaviour(self):
         cloudflare = Rule("cf", "Cloudflare", "edge", 10,
                           ("cloudflare", "product"))
