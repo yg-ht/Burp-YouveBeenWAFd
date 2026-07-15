@@ -128,20 +128,23 @@ Before release, manually verify:
 1. Jython loads the entry point and all Python modules.
 2. Settings, rule overrides, and probe overrides persist across reload.
 3. All three UI tabs render and remain responsive with 213 probe controls;
-   settings and checkbox rows retain natural font-relative heights.
+   settings and checkbox rows retain natural font-relative heights and tab
+   headers remain within their documented width bounds.
 4. Rule/provider and probe/function groups start collapsed; expand/collapse-all
    controls, filter-driven expansion, and hiding empty groups behave correctly.
 5. Rule and probe filters match documented metadata, update matched counts,
    and limit bulk enable/disable actions to matching rows.
-6. Passive in-scope/out-of-scope behaviour matches the checkbox.
-7. Scanner and context-menu requests appear correctly in Burp's extension
+6. The two non-GET path labels show the documented explanation and persist as
+   `root` or `selected` across reload.
+7. Passive in-scope/out-of-scope behaviour matches the checkbox.
+8. Scanner and context-menu requests appear correctly in Burp's extension
    traffic view.
-8. Constructed non-GET requests use `/` or the selected target as configured.
-9. Content types, multipart boundaries, duplicate parameters/cookies, and
+9. Constructed non-GET requests use `/` or the selected target as configured.
+10. Content types, multipart boundaries, duplicate parameters/cookies, and
    `Content-Length` are correct on the wire.
-10. HTTP/1.1 and HTTP/2 responses retain a usable version field.
-11. Timeout/reset behaviour is represented as Burp exposes it on the platform.
-12. One current issue remains after a large active matrix.
+11. HTTP/1.1 and HTTP/2 responses retain a usable version field.
+12. Timeout/reset behaviour is represented as Burp exposes it on the platform.
+13. One current issue remains after a large active matrix.
 
 ## Known limitations
 

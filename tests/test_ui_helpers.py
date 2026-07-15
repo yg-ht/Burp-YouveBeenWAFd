@@ -27,6 +27,22 @@ class _Checkbox(object):
 
 
 class CatalogueFilterTests(unittest.TestCase):
+    def test_non_get_target_display_labels_round_trip_to_saved_values(self):
+        root_label = WafExtension._non_get_target_label("root")
+        selected_label = WafExtension._non_get_target_label("selected")
+
+        self.assertEqual("Root path (/)", root_label)
+        self.assertEqual("Selected request path", selected_label)
+        self.assertEqual("root", WafExtension._non_get_target_value(root_label))
+        self.assertEqual("selected", WafExtension._non_get_target_value(selected_label))
+        with self.assertRaises(ValueError):
+            WafExtension._non_get_target_value("unclear option")
+
+    def test_tab_header_width_is_padded_and_bounded(self):
+        self.assertEqual(90, WafExtension._tab_header_width(20))
+        self.assertEqual(144, WafExtension._tab_header_width(120))
+        self.assertEqual(180, WafExtension._tab_header_width(500))
+
     def test_rules_are_grouped_by_provider_or_generic_behaviour(self):
         cloudflare = Rule("cf", "Cloudflare", "edge", 10,
                           ("cloudflare", "product"))

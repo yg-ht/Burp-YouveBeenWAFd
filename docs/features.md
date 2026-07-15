@@ -66,7 +66,9 @@ Every constructed specialist profile normally sends a same-shape control:
 
 Constructed non-GET profiles target `/` by default, including when active
 probing was triggered from a GET request. `non_get_target=selected` preserves
-the selected target. An explicit profile endpoint takes precedence.
+the selected target. The UI labels these choices **Root path (/)** and
+**Selected request path**, respectively. An explicit profile endpoint takes
+precedence.
 
 ## Specialist request construction
 

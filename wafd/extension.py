@@ -19,6 +19,10 @@ from .rules import RuleCatalogue
 class WafExtension(object):
     """Register the extension without importing Burp classes at module load."""
 
+    NON_GET_TARGET_OPTIONS = (
+        ("root", "Root path (/)"),
+        ("selected", "Selected request path"),
+    )
     RULE_GROUP_ORDER = (
         "Generic behavioural rules", "Cloudflare", "AWS WAF", "Azure WAF",
         "Google Cloud Armor", "ModSecurity / OWASP CRS", "F5", "Akamai",
@@ -105,6 +109,27 @@ class WafExtension(object):
             self.catalogue.rules, self.probes.catalogue.probes)
         self.callbacks.saveExtensionSetting(
             "catalogue_overrides", self.overrides.to_json())
+
+    @classmethod
+    def _non_get_target_label(cls, stored_value):
+        """Return a descriptive UI label for a persisted target policy."""
+        for value, label in cls.NON_GET_TARGET_OPTIONS:
+            if stored_value == value:
+                return label
+        raise ValueError("unsupported non-GET target policy")
+
+    @classmethod
+    def _non_get_target_value(cls, display_label):
+        """Return the stable persisted value behind a target-policy label."""
+        for value, label in cls.NON_GET_TARGET_OPTIONS:
+            if display_label == label:
+                return value
+        raise ValueError("unsupported non-GET target selection")
+
+    @staticmethod
+    def _tab_header_width(preferred_width):
+        """Pad a tab title while bounding narrow and wide look-and-feels."""
+        return max(90, min(int(preferred_width) + 24, 180))
 
     @staticmethod
     def _rule_group(rule):
@@ -240,8 +265,8 @@ class WafExtension(object):
     def getUiComponent(self):
         if self._panel is None:
             try:
-                from java.awt import (BorderLayout, FlowLayout, GridBagConstraints,
-                                      GridBagLayout, Insets)
+                from java.awt import (BorderLayout, Dimension, FlowLayout,
+                                      GridBagConstraints, GridBagLayout, Insets)
                 from javax.swing import (BorderFactory, Box, BoxLayout, JButton,
                                          JCheckBox, JComboBox, JLabel, JPanel,
                                          JScrollPane, JTabbedPane, JTextField,
@@ -252,6 +277,17 @@ class WafExtension(object):
                 # Keep settings and the two large catalogues separate so the
                 # complete 200+ probe set remains practical to navigate.
                 tabs = JTabbedPane()
+                tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT)
+
+                def add_compact_tab(title, component):
+                    tabs.addTab(title, component)
+                    header = JLabel(title, SwingConstants.CENTER)
+                    preferred = header.getPreferredSize()
+                    size = Dimension(self._tab_header_width(preferred.width),
+                                     preferred.height + 6)
+                    header.setPreferredSize(size)
+                    header.setMaximumSize(size)
+                    tabs.setTabComponentAt(tabs.getTabCount() - 1, header)
 
                 # Place each settings group at its preferred height.  The old
                 # single GridLayout filled the complete viewport and stretched
@@ -325,10 +361,18 @@ class WafExtension(object):
                 add_setting(active_settings,
                             "Maximum probe requests (blank = unlimited)", max_probes)
                 non_get_target = JComboBox()
-                non_get_target.addItem("root")
-                non_get_target.addItem("selected")
-                non_get_target.setSelectedItem(self.configuration.non_get_target)
-                add_setting(active_settings, "Constructed non-GET target", non_get_target)
+                for unused_value, display_label in self.NON_GET_TARGET_OPTIONS:
+                    non_get_target.addItem(display_label)
+                non_get_target.setSelectedItem(
+                    self._non_get_target_label(self.configuration.non_get_target))
+                target_help = (
+                    "<html><b>Root path (/):</b> send constructed non-GET probes to /."
+                    "<br><b>Selected request path:</b> preserve the path selected for "
+                    "active scanning.</html>")
+                non_get_target.setToolTipText(target_help)
+                non_get_target.getAccessibleContext().setAccessibleDescription(target_help)
+                add_setting(active_settings, "Path for constructed non-GET probes",
+                            non_get_target)
                 finish_settings_group(active_settings)
                 settings_panel.add(active_settings)
                 settings_panel.add(Box.createVerticalStrut(6))
@@ -358,7 +402,7 @@ class WafExtension(object):
                 settings_view = JPanel()
                 settings_view.setLayout(BorderLayout())
                 settings_view.add(settings_panel, BorderLayout.NORTH)
-                tabs.addTab("Settings", JScrollPane(settings_view))
+                add_compact_tab("Settings", JScrollPane(settings_view))
 
                 rule_checkboxes = []
                 for rule in self.catalogue.rules:
@@ -509,11 +553,11 @@ class WafExtension(object):
                     disable_visible.addActionListener(select_visible(False))
                     return tab
 
-                tabs.addTab("Detection Rules", catalogue_tab(
+                add_compact_tab("Detection Rules", catalogue_tab(
                     rule_checkboxes, self._rule_search_values, self._rule_group,
                     self.RULE_GROUP_ORDER,
                     "Match rule name, ID, evidence group, or tag"))
-                tabs.addTab("Active Probes", catalogue_tab(
+                add_compact_tab("Active Probes", catalogue_tab(
                     probe_checkboxes, self._probe_search_values, self._probe_group,
                     self.PROBE_GROUP_ORDER,
                     "Match probe name, ID, provider, action, method, placement, or content type"))
@@ -528,7 +572,8 @@ class WafExtension(object):
                         candidate = Configuration(
                             threshold.getText(), in_scope_only.isSelected(),
                             None if not maximum_text else int(maximum_text),
-                            enabled.isSelected(), str(non_get_target.getSelectedItem()),
+                            enabled.isSelected(), self._non_get_target_value(
+                                str(non_get_target.getSelectedItem())),
                             int(body_threshold.getText()), int(header_threshold.getText()),
                             int(header_count_threshold.getText()),
                             int(inspection_boundary.getText()), int(size_hard_max.getText()))
