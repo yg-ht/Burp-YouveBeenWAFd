@@ -36,6 +36,24 @@ class ProbePlannerTests(unittest.TestCase):
         self.assertEqual(ProbePlanner(4, catalogue=catalogue).plan("GET", "query"),
                          ["x", "x", "x", "x"])
 
+    def test_complete_entry_plan_honours_repetition(self):
+        catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+            '{"id":"sequence","value":"x","repeat":3}]}')
+        entries = ProbePlanner(catalogue=catalogue).plan_entries("GET", "query")
+        self.assertEqual([probe.probe_id for probe in entries],
+                         ["sequence", "sequence", "sequence"])
+
+    def test_default_plan_returns_every_eligible_probe(self):
+        catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+            '{"id":"one","value":"1"},{"id":"two","value":"2"}]}')
+        self.assertEqual(ProbePlanner(catalogue=catalogue).plan("GET", "query"),
+                         ["1", "2"])
+
+    def test_zero_limit_sends_no_probes(self):
+        catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+            '{"id":"one","value":"1"}]}')
+        self.assertEqual(ProbePlanner(0, catalogue=catalogue).plan("GET", "query"), [])
+
     def test_probe_method_allowlist_is_enforced(self):
         catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
             '{"id":"post","value":"x","safe_methods":["POST"]}]}')

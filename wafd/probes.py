@@ -69,10 +69,14 @@ class ProbeCatalogue(object):
 
 
 class ProbePlanner(object):
-    """Plan bounded marker payloads, refusing unsafe methods and locations."""
+    """Plan enabled marker payloads for compatible methods and locations."""
 
-    def __init__(self, max_probes=3, catalogue=None):
-        self.max_probes = max(0, min(int(max_probes), 20))
+    def __init__(self, max_probes=None, catalogue=None):
+        # ``None`` means all eligible catalogue entries. Numeric limits count
+        # expanded repeat runs rather than logical entries, making the setting
+        # match the number of probe requests the adapter will transmit.
+        self.max_probes = (None if max_probes is None else
+                           max(0, min(int(max_probes), 1000)))
         self.catalogue = catalogue or ProbeCatalogue.bundled()
 
     def plan(self, method, insertion_point_name="", providers=None):
@@ -83,14 +87,8 @@ class ProbePlanner(object):
         # because buildRequest could overwrite credentials or session state.
         if any(term in name for term in ("cookie", "authorization", "header")):
             return []
-        provider_filter = set(providers or [])
-        selected = []
-        for probe in self.plan_entries(method, insertion_point_name, providers):
-            for _ in range(probe.repeat):
-                selected.append(probe.value)
-                if len(selected) >= self.max_probes:
-                    return selected
-        return selected
+        return [probe.value for probe in
+                self.plan_entries(method, insertion_point_name, providers)]
 
     def plan_entries(self, method, insertion_point_name="", providers=None):
         """Return catalogue entries so adapters can apply profile metadata."""
@@ -102,6 +100,8 @@ class ProbePlanner(object):
             return []
         provider_filter = set(providers or [])
         selected = []
+        if self.max_probes == 0:
+            return selected
         for probe in self.catalogue.probes:
             if not probe.enabled:
                 continue
@@ -112,7 +112,10 @@ class ProbePlanner(object):
                 continue
             if provider_filter and not provider_filter.intersection(probe.providers):
                 continue
-            selected.append(probe)
-            if len(selected) >= self.max_probes:
-                break
+            # Repetition is expanded here because the Burp adapter consumes
+            # complete entries rather than the raw-value plan() helper.
+            for _ in range(probe.repeat):
+                selected.append(probe)
+                if self.max_probes is not None and len(selected) >= self.max_probes:
+                    return selected
         return selected

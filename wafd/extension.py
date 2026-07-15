@@ -294,17 +294,41 @@ class WafExtension(object):
                 def getInsertionPointName(inner):
                     return "query"
                 def buildRequest(inner, payload):
-                    # Keep the original body while constructing the synthetic
-                    # insertion point. The current request-line manipulation
-                    # is documented as an adapter limitation pending a Burp
-                    # regression harness and a target-aware parser.
+                    # Parse and rebuild the request line so the marker is added
+                    # to the request target, never after the HTTP version.
                     headers = list(request_info.getHeaders())
-                    target = headers[0]
-                    separator = "&" if "?" in target else "?"
                     encoded = extension.helpers.urlEncode(payload.decode("utf-8"))
-                    headers[0] = "%s%swafd_probe=%s" % (target, separator, encoded)
+                    headers[0] = extension._append_query_parameter(
+                        headers[0], "wafd_probe", encoded)
                     body = message.getRequest()[request_info.getBodyOffset():]
                     return extension.helpers.buildHttpMessage(headers, body)
             self.doActiveScan(message, SelectedPoint())
         except Exception as error:
             self.callbacks.printError("WAF Detector context probe failed: %s" % error)
+
+    @staticmethod
+    def _append_query_parameter(request_line, name, encoded_value):
+        """Append an encoded query parameter to a valid HTTP request target."""
+        # Split only between the three request-line components and normalise
+        # their separators when rebuilding the line.
+        parts = str(request_line).split(None, 2)
+        if len(parts) != 3 or not parts[0] or not parts[1] or not parts[2]:
+            raise ValueError("request line must contain method, target and HTTP version")
+        method, target, version = parts
+        if target == "*" or method.upper() == "CONNECT":
+            raise ValueError("request-target form does not support query parameters")
+        if not version.upper().startswith("HTTP/"):
+            raise ValueError("request line must end with an HTTP version")
+
+        # Fragments are not normally present in HTTP request targets, but if a
+        # client supplies one, keep it after the newly added query parameter.
+        target_and_query, marker, fragment = target.partition("#")
+        if target_and_query.endswith(("?", "&")):
+            separator = ""
+        else:
+            separator = "&" if "?" in target_and_query else "?"
+        updated_target = "%s%s%s=%s" % (
+            target_and_query, separator, str(name), str(encoded_value))
+        if marker:
+            updated_target = "%s#%s" % (updated_target, fragment)
+        return "%s %s %s" % (method, updated_target, version)

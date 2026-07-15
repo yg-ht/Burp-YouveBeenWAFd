@@ -16,7 +16,11 @@ class ConfigurationTests(unittest.TestCase):
     def test_bounds_are_enforced(self):
         with self.assertRaises(ValueError):
             Configuration(1.1)
-        self.assertEqual(Configuration(max_probes=100).max_probes, 20)
+        self.assertEqual(Configuration(max_probes=5000).max_probes, 1000)
+
+    def test_active_probes_are_unlimited_by_default(self):
+        self.assertIsNone(Configuration().max_probes)
+        self.assertIsNone(Configuration.from_json(Configuration().to_json()).max_probes)
 
     def test_non_get_target_is_restricted(self):
         with self.assertRaises(ValueError):
