@@ -1,0 +1,5 @@
+# Virtual environments contain machine-specific executables and installed packages.
+.venv/
+
+# PyCharm stores local project and workspace metadata in this directory.
+.idea/
