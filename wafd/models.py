@@ -1,73 +1,68 @@
-"""Data structures shared by passive and active detection routines."""
+"""Data structures shared by passive and active detection routines.
 
-try:
-    from dataclasses import dataclass, field
-except ImportError:  # pragma: no cover - Jython 2.7 uses the fallback classes.
-    dataclass = None
+This module is imported directly by Burp's Jython 2.7 runtime.  Every code path
+must therefore use Python 2-compatible syntax: placing Python 3 syntax behind a
+conditional does not help because Jython parses the complete file first.
+"""
 
 
-# CPython uses dataclasses in the testable core, while Burp's Jython 2.7
-# runtime receives equivalent plain classes. Keep the two representations
-# field-compatible so the detector has no Burp-specific data path.
-if dataclass:
-    @dataclass
-    class Rule:
-        """A configurable, data-driven detection rule."""
+class Rule(object):
+    """A configurable, data-driven detection rule.
 
-        rule_id: str
-        name: str
-        evidence_group: str
-        weight: float
-        tags: tuple = field(default_factory=tuple)
-        matcher: dict = field(default_factory=dict)
-        enabled: bool = True
+    Args:
+        rule_id: Stable identifier used by evidence and configuration overrides.
+        name: Human-readable rule name.
+        evidence_group: Group used to de-duplicate confidence contributions.
+        weight: Confidence contribution for this rule.
+        tags: Product, action, and generic classification tags.
+        matcher: Data-driven matcher configuration.
+        enabled: Whether the detector should evaluate this rule.
+    """
 
-    @dataclass(frozen=True)
-    class Evidence:
-        """One distinct observation produced by a rule."""
+    def __init__(self, rule_id, name, evidence_group, weight, tags=(), matcher=None,
+                 enabled=True):
+        # Store identifiers separately to keep diagnosis straightforward in
+        # Jython stack traces and interactive Burp inspection.
+        self.rule_id = rule_id
+        self.name = name
+        self.evidence_group = evidence_group
+        self.weight = float(weight)
 
-        rule_id: str
-        origin: str
-        detail: str
-        product: str = ""
-        source: str = "passive"
-        action: str = ""
-        characteristic: str = ""
-        classification: str = ""
+        # Copy tags into an immutable tuple.  A fresh matcher is created only
+        # when none was supplied, preventing instances from sharing a default.
+        self.tags = tuple(tags)
+        self.matcher = {} if matcher is None else matcher
+        self.enabled = bool(enabled)
 
-    @dataclass
-    class OriginAssessment:
-        """Current bounded assessment for one origin."""
 
-        origin: str
-        evidence: list = field(default_factory=list)
-        representative_message: object = None
+class Evidence(object):
+    """One distinct observation produced by a rule.
 
-else:
-    class Rule(object):
-        """Jython-compatible representation of a detection rule."""
+    The optional fields remain strings so evidence can be rendered, persisted
+    in memory, and scored without importing Burp-specific Java classes.
+    """
 
-        def __init__(self, rule_id, name, evidence_group, weight, tags=(), matcher=None,
-                     enabled=True):
-            self.rule_id, self.name = rule_id, name
-            self.evidence_group, self.weight = evidence_group, float(weight)
-            self.tags, self.matcher = tuple(tags), matcher or {}
-            self.enabled = bool(enabled)
+    def __init__(self, rule_id, origin, detail, product="", source="passive", action="",
+                 characteristic="", classification=""):
+        # Keep constructor ordering compatible with every existing detector
+        # call while retaining named-argument support for specialist evidence.
+        self.rule_id = rule_id
+        self.origin = origin
+        self.detail = detail
+        self.product = product
+        self.source = source
+        self.action = action
+        self.characteristic = characteristic
+        self.classification = classification
 
-    class Evidence(object):
-        """Jython-compatible representation of one observation."""
 
-        def __init__(self, rule_id, origin, detail, product="", source="passive", action="",
-                     characteristic="", classification=""):
-            self.rule_id, self.origin, self.detail = rule_id, origin, detail
-            self.product, self.source, self.action = product, source, action
-            self.characteristic = characteristic
-            self.classification = classification
+class OriginAssessment(object):
+    """Current bounded assessment for one origin."""
 
-    class OriginAssessment(object):
-        """Jython-compatible assessment container for one origin."""
+    def __init__(self, origin, evidence=None, representative_message=None):
+        self.origin = origin
 
-        def __init__(self, origin, evidence=None, representative_message=None):
-            self.origin = origin
-            self.evidence = list(evidence or [])
-            self.representative_message = representative_message
+        # Copy caller-provided evidence so the assessment owns its mutable
+        # collection and cannot accidentally modify a list held elsewhere.
+        self.evidence = list(evidence) if evidence is not None else []
+        self.representative_message = representative_message
