@@ -3,6 +3,14 @@
 import json
 import os
 
+# Jython 2.7's JSON decoder returns ``unicode`` for catalogue text.  Use the
+# common Python 2 string base while retaining an ordinary ``str`` alias under
+# the Python 3 test environment.
+try:
+    string_types = (basestring,)
+except NameError:  # Python 3 test environment.
+    string_types = (str,)
+
 
 class Probe(object):
     """A raw insertion-point value and its expected WAF behaviours."""
@@ -60,7 +68,9 @@ class ProbeCatalogue(object):
         if not isinstance(item, dict) or not item.get("id") or "value" not in item:
             raise ValueError("probe requires id and value")
         value = item["value"]
-        if not isinstance(value, str) or len(value) > 4096:
+        # Accept both byte and Unicode strings under Jython.  The payload stays
+        # bounded before it can be expanded into active requests.
+        if not isinstance(value, string_types) or len(value) > 4096:
             raise ValueError("probe value must be a bounded string")
         return Probe(value, item.get("providers", []), item.get("actions", []),
                      item["id"], item.get("name", item["id"]), item.get("enabled", True),

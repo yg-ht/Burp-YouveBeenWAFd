@@ -1,9 +1,36 @@
 import unittest
+from unittest import mock
 
+import wafd.probes as probes_module
 from wafd.probes import ProbeCatalogue, ProbePlanner
 
 
 class ProbePlannerTests(unittest.TestCase):
+    def test_catalogue_accepts_jython_unicode_values(self):
+        # Python 2/Jython distinguishes ``unicode`` from ``str``.  This small
+        # stand-in reproduces that type boundary under the CPython test runner.
+        class JythonUnicode(object):
+            def __init__(self, value):
+                self.value = value
+
+            def __len__(self):
+                return len(self.value)
+
+        value = JythonUnicode("WAFTEST")
+        document = {
+            "schema_version": 1,
+            "probes": [{"id": "jython-text", "value": value}],
+        }
+
+        # The compatibility alias contains ``basestring`` under Jython.  Patch
+        # the equivalent stand-in here while returning a decoded JSON document.
+        with mock.patch.object(probes_module.json, "loads", return_value=document):
+            with mock.patch.object(
+                    probes_module, "string_types", (str, JythonUnicode), create=True):
+                catalogue = ProbeCatalogue.from_json("ignored")
+
+        self.assertIs(value, catalogue.probes[0].value)
+
     def test_safe_methods_are_bounded(self):
         probes = ProbePlanner(3).plan("GET", "query")
         self.assertEqual(len(probes), 3)
