@@ -19,6 +19,23 @@ from .rules import RuleCatalogue
 class WafExtension(object):
     """Register the extension without importing Burp classes at module load."""
 
+    RULE_GROUP_ORDER = (
+        "Generic behavioural rules", "Cloudflare", "AWS WAF", "Azure WAF",
+        "Google Cloud Armor", "ModSecurity / OWASP CRS", "F5", "Akamai",
+        "Imperva", "FortiWeb", "Sucuri", "Fastly", "Barracuda", "Radware",
+        "Other rules",
+    )
+    PROBE_GROUP_ORDER = (
+        "SQL injection", "Cross-site scripting",
+        "Path traversal, inclusion and SSRF",
+        "Command, template and runtime markers",
+        "Structured parsers and content types",
+        "HTTP methods, protocol and encoding",
+        "Multipart, cookies and headers",
+        "Size and inspection boundaries",
+        "Provider-specific profiles", "Other generic probes",
+    )
+
     def __init__(self):
         self.callbacks = None
         self.helpers = None
@@ -90,6 +107,86 @@ class WafExtension(object):
             "catalogue_overrides", self.overrides.to_json())
 
     @staticmethod
+    def _rule_group(rule):
+        """Return a stable provider or generic section for a detection rule."""
+        provider_groups = (
+            ("cloudflare", "Cloudflare"), ("aws-waf", "AWS WAF"),
+            ("azure-waf", "Azure WAF"),
+            ("google-cloud-armor", "Google Cloud Armor"),
+            ("modsecurity", "ModSecurity / OWASP CRS"), ("f5", "F5"),
+            ("akamai", "Akamai"), ("imperva", "Imperva"),
+            ("fortiweb", "FortiWeb"), ("sucuri", "Sucuri"),
+            ("fastly", "Fastly"), ("barracuda", "Barracuda"),
+            ("radware", "Radware"),
+        )
+        tags = set(str(tag).lower() for tag in rule.tags)
+        for provider_tag, label in provider_groups:
+            if provider_tag in tags:
+                return label
+        if "generic" in tags:
+            return "Generic behavioural rules"
+        return "Other rules"
+
+    @staticmethod
+    def _probe_group(probe):
+        """Return a stable functional section for an active probe."""
+        identifier = str(probe.probe_id).lower()
+        # Matrix and generic probes may list providers whose products commonly
+        # inspect that input.  Only the explicit vendor diagnostic profiles
+        # belong in the provider section; association metadata must not swallow
+        # functional SQL/XSS/parser groups.
+        provider_prefixes = (
+            "cloudflare.", "aws.", "azure.", "google.", "modsecurity.",
+            "f5.", "akamai.", "imperva.", "fortiweb.",
+        )
+        if identifier.startswith(provider_prefixes):
+            return "Provider-specific profiles"
+        groups = (
+            (("matrix.sqli.", "generic.sqli"), "SQL injection"),
+            (("matrix.xss.", "generic.xss", "generic.angle-encoding",
+              "generic.json-script-fragment"), "Cross-site scripting"),
+            (("matrix.absolute-path.", "generic.traversal", "generic.lfi",
+              "generic.rfi", "generic.ssrf"),
+             "Path traversal, inclusion and SSRF"),
+            (("matrix.command-markers.", "matrix.php-markers.",
+              "generic.command", "generic.template", "generic.el-marker",
+              "generic.php", "generic.java-serialisation"),
+             "Command, template and runtime markers"),
+            (("matrix.content-type.", "matrix.graphql-query.",
+              "matrix.xml-safe-entity.", "generic.graphql",
+              "generic.xml-safe-entity"), "Structured parsers and content types"),
+            (("matrix.hpp.", "matrix.parameter-name.", "matrix.protocol-input.",
+              "matrix.query-structure.", "matrix.http-method.",
+              "generic.rate-limit", "generic.crlf", "generic.invalid-percent",
+              "generic.empty-value"), "HTTP methods, protocol and encoding"),
+            (("matrix.multipart.", "matrix.cookie-behaviour.",
+              "generic.multipart", "generic.header", "generic.cookie"),
+             "Multipart, cookies and headers"),
+            (("matrix.size-boundary.", "matrix.inspection-boundary."),
+             "Size and inspection boundaries"),
+        )
+        for prefixes, label in groups:
+            if identifier.startswith(prefixes):
+                return label
+        return "Other generic probes"
+
+    @staticmethod
+    def _group_catalogue_rows(rows, group_getter, group_order):
+        """Return all rows bucketed in a declared, deterministic order."""
+        buckets = {}
+        for item, checkbox in rows:
+            label = group_getter(item)
+            buckets.setdefault(label, []).append((item, checkbox))
+        grouped = []
+        for label in group_order:
+            if label in buckets:
+                grouped.append((label, buckets.pop(label)))
+        # Unknown future categories remain visible rather than being dropped.
+        for label in sorted(buckets):
+            grouped.append((label, buckets[label]))
+        return grouped
+
+    @staticmethod
     def _matches_catalogue_filter(values, query):
         """Return whether every whitespace-delimited term occurs in a row."""
         # Multiple terms narrow a large catalogue predictably without adding a
@@ -143,10 +240,12 @@ class WafExtension(object):
     def getUiComponent(self):
         if self._panel is None:
             try:
-                from java.awt import BorderLayout, FlowLayout, GridLayout
+                from java.awt import (BorderLayout, FlowLayout, GridBagConstraints,
+                                      GridBagLayout, Insets)
                 from javax.swing import (BorderFactory, Box, BoxLayout, JButton,
                                          JCheckBox, JComboBox, JLabel, JPanel,
-                                         JScrollPane, JTabbedPane, JTextField)
+                                         JScrollPane, JTabbedPane, JTextField,
+                                         JToggleButton, SwingConstants)
                 self._panel = JPanel()
                 self._panel.setLayout(BorderLayout())
 
@@ -161,19 +260,52 @@ class WafExtension(object):
                 settings_panel.setLayout(BoxLayout(settings_panel, BoxLayout.Y_AXIS))
                 settings_panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
 
+                setting_rows = {}
+
                 def settings_group(title):
-                    group = JPanel(GridLayout(0, 2, 8, 4))
+                    group = JPanel(GridBagLayout())
                     group.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createTitledBorder(title),
                         BorderFactory.createEmptyBorder(4, 6, 6, 6)))
                     group.setAlignmentX(0.0)
+                    setting_rows[id(group)] = 0
                     return group
 
                 def add_setting(group, caption, component):
+                    row = setting_rows[id(group)]
                     label = JLabel(caption)
                     label.setLabelFor(component)
-                    group.add(label)
-                    group.add(component)
+
+                    # Neither component fills vertically.  GridBag allocates
+                    # the active look-and-feel's preferred font-relative height
+                    # even when Burp gives the enclosing tab substantial room.
+                    label_constraints = GridBagConstraints()
+                    label_constraints.gridx = 0
+                    label_constraints.gridy = row
+                    label_constraints.anchor = GridBagConstraints.WEST
+                    label_constraints.insets = Insets(2, 2, 2, 10)
+                    group.add(label, label_constraints)
+
+                    control_constraints = GridBagConstraints()
+                    control_constraints.gridx = 1
+                    control_constraints.gridy = row
+                    control_constraints.weightx = 1.0
+                    control_constraints.fill = GridBagConstraints.HORIZONTAL
+                    control_constraints.anchor = GridBagConstraints.WEST
+                    control_constraints.insets = Insets(2, 2, 2, 2)
+                    group.add(component, control_constraints)
+                    setting_rows[id(group)] = row + 1
+
+                def finish_settings_group(group):
+                    # A weighted empty row consumes any unexpected surplus
+                    # height; real controls above it retain preferred heights.
+                    filler = GridBagConstraints()
+                    filler.gridx = 0
+                    filler.gridy = setting_rows[id(group)]
+                    filler.gridwidth = 2
+                    filler.weighty = 1.0
+                    filler.fill = GridBagConstraints.VERTICAL
+                    group.add(Box.createVerticalGlue(), filler)
 
                 detection_settings = settings_group("Detection")
                 enabled = JCheckBox("Enabled", self.configuration.enabled)
@@ -183,6 +315,7 @@ class WafExtension(object):
                             "Restrict passive monitoring to Burp scope", in_scope_only)
                 threshold = JTextField(str(self.configuration.threshold))
                 add_setting(detection_settings, "WAF confidence threshold (0-1)", threshold)
+                finish_settings_group(detection_settings)
                 settings_panel.add(detection_settings)
                 settings_panel.add(Box.createVerticalStrut(6))
 
@@ -196,6 +329,7 @@ class WafExtension(object):
                 non_get_target.addItem("selected")
                 non_get_target.setSelectedItem(self.configuration.non_get_target)
                 add_setting(active_settings, "Constructed non-GET target", non_get_target)
+                finish_settings_group(active_settings)
                 settings_panel.add(active_settings)
                 settings_panel.add(Box.createVerticalStrut(6))
 
@@ -216,6 +350,7 @@ class WafExtension(object):
                 size_hard_max = JTextField(str(self.configuration.size_hard_max))
                 add_setting(size_settings, "Hard maximum generated size (bytes)",
                             size_hard_max)
+                finish_settings_group(size_settings)
                 settings_panel.add(size_settings)
 
                 # BorderLayout.NORTH prevents BoxLayout from distributing spare
@@ -243,35 +378,87 @@ class WafExtension(object):
                                          probe.enabled)
                     probe_checkboxes.append((probe, checkbox))
 
-                def catalogue_tab(rows, value_getter, filter_description):
+                def catalogue_tab(rows, value_getter, group_getter, group_order,
+                                  filter_description):
                     tab = JPanel()
                     tab.setLayout(BorderLayout(0, 6))
                     tab.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8))
 
-                    controls = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2))
+                    controls = JPanel()
+                    controls.setLayout(BoxLayout(controls, BoxLayout.Y_AXIS))
+                    filter_controls = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2))
+                    group_controls = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2))
+                    filter_controls.setAlignmentX(0.0)
+                    group_controls.setAlignmentX(0.0)
                     filter_label = JLabel("Filter")
                     filter_text = JTextField(24)
                     filter_text.setToolTipText(filter_description)
                     filter_label.setLabelFor(filter_text)
                     apply_filter = JButton("Apply")
                     clear_filter = JButton("Show all")
-                    enable_visible = JButton("Enable visible")
-                    disable_visible = JButton("Disable visible")
-                    visible_count = JLabel("%d of %d shown" % (len(rows), len(rows)))
+                    expand_all = JButton("Expand all")
+                    collapse_all = JButton("Collapse all")
+                    enable_visible = JButton("Enable matches")
+                    disable_visible = JButton("Disable matches")
+                    visible_count = JLabel("%d of %d matched" % (len(rows), len(rows)))
                     for component in (filter_label, filter_text, apply_filter,
-                                      clear_filter, enable_visible, disable_visible,
-                                      visible_count):
-                        controls.add(component)
+                                      clear_filter, visible_count):
+                        filter_controls.add(component)
+                    for component in (expand_all, collapse_all, enable_visible,
+                                      disable_visible):
+                        group_controls.add(component)
+                    controls.add(filter_controls)
+                    controls.add(group_controls)
                     tab.add(controls, BorderLayout.NORTH)
 
-                    # BoxLayout retains each checkbox's natural height.  A
-                    # north-anchored wrapper leaves surplus viewport space below
-                    # the list instead of stretching every row.
+                    # Each functional/provider group starts collapsed so the
+                    # tab presents a navigable overview rather than hundreds of
+                    # uninterrupted checkboxes.
                     rows_panel = JPanel()
                     rows_panel.setLayout(BoxLayout(rows_panel, BoxLayout.Y_AXIS))
-                    for unused_item, checkbox in rows:
-                        checkbox.setAlignmentX(0.0)
-                        rows_panel.add(checkbox)
+                    grouped_rows = self._group_catalogue_rows(
+                        rows, group_getter, group_order)
+                    group_sections = []
+
+                    def set_group_expanded(section, expanded):
+                        label, group_rows, unused_container, toggle, content = section
+                        toggle.setSelected(bool(expanded))
+                        content.setVisible(bool(expanded))
+                        marker = "[-]" if expanded else "[+]"
+                        matched = sum(1 for unused_item, checkbox in group_rows
+                                      if checkbox.isVisible())
+                        count = ("%d/%d" % (matched, len(group_rows))
+                                 if matched != len(group_rows) else str(len(group_rows)))
+                        toggle.setText("%s %s (%s)" % (marker, label, count))
+
+                    def make_toggle_listener(section):
+                        def toggle_group(event):
+                            set_group_expanded(section, section[3].isSelected())
+                            rows_panel.revalidate()
+                            rows_panel.repaint()
+                        return toggle_group
+
+                    for label, group_rows in grouped_rows:
+                        group_panel = JPanel()
+                        group_panel.setLayout(BorderLayout())
+                        group_panel.setAlignmentX(0.0)
+                        group_panel.setBorder(BorderFactory.createEmptyBorder(0, 0, 5, 0))
+                        toggle = JToggleButton("[+] %s (%d)" % (label, len(group_rows)))
+                        toggle.setHorizontalAlignment(SwingConstants.LEFT)
+                        content = JPanel()
+                        content.setLayout(BoxLayout(content, BoxLayout.Y_AXIS))
+                        content.setBorder(BorderFactory.createEmptyBorder(2, 18, 4, 4))
+                        for unused_item, checkbox in group_rows:
+                            checkbox.setAlignmentX(0.0)
+                            content.add(checkbox)
+                        content.setVisible(False)
+                        group_panel.add(toggle, BorderLayout.NORTH)
+                        group_panel.add(content, BorderLayout.CENTER)
+                        rows_panel.add(group_panel)
+                        section = (label, group_rows, group_panel, toggle, content)
+                        group_sections.append(section)
+                        toggle.addActionListener(make_toggle_listener(section))
+
                     rows_view = JPanel()
                     rows_view.setLayout(BorderLayout())
                     rows_view.add(rows_panel, BorderLayout.NORTH)
@@ -280,13 +467,32 @@ class WafExtension(object):
                     def refresh_filter(event=None):
                         shown = self._filter_catalogue_rows(
                             rows, filter_text.getText(), value_getter)
-                        visible_count.setText("%d of %d shown" % (shown, len(rows)))
+                        visible_count.setText("%d of %d matched" % (shown, len(rows)))
+                        filtering = bool(str(filter_text.getText()).strip())
+                        for section in group_sections:
+                            group_matches = any(checkbox.isVisible()
+                                                for unused_item, checkbox in section[1])
+                            section[2].setVisible(group_matches)
+                            # Search results should be immediately visible;
+                            # outside a search the user's expansion state stays.
+                            if filtering and group_matches:
+                                set_group_expanded(section, True)
+                            else:
+                                set_group_expanded(section, section[3].isSelected())
+                        rows_panel.revalidate()
+                        rows_panel.repaint()
+
+                    def set_all_groups(expanded):
+                        for section in group_sections:
+                            if section[2].isVisible():
+                                set_group_expanded(section, expanded)
                         rows_panel.revalidate()
                         rows_panel.repaint()
 
                     def show_all(event):
                         filter_text.setText("")
                         refresh_filter()
+                        set_all_groups(False)
 
                     def select_visible(selected):
                         def apply_selection(event):
@@ -297,15 +503,19 @@ class WafExtension(object):
                     filter_text.addActionListener(refresh_filter)
                     apply_filter.addActionListener(refresh_filter)
                     clear_filter.addActionListener(show_all)
+                    expand_all.addActionListener(lambda event: set_all_groups(True))
+                    collapse_all.addActionListener(lambda event: set_all_groups(False))
                     enable_visible.addActionListener(select_visible(True))
                     disable_visible.addActionListener(select_visible(False))
                     return tab
 
                 tabs.addTab("Detection Rules", catalogue_tab(
-                    rule_checkboxes, self._rule_search_values,
+                    rule_checkboxes, self._rule_search_values, self._rule_group,
+                    self.RULE_GROUP_ORDER,
                     "Match rule name, ID, evidence group, or tag"))
                 tabs.addTab("Active Probes", catalogue_tab(
-                    probe_checkboxes, self._probe_search_values,
+                    probe_checkboxes, self._probe_search_values, self._probe_group,
+                    self.PROBE_GROUP_ORDER,
                     "Match probe name, ID, provider, action, method, placement, or content type"))
                 self._panel.add(tabs, BorderLayout.CENTER)
 

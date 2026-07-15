@@ -39,8 +39,8 @@ attribution but does not by itself claim that Cloudflare WAF blocked a request.
 - Separate action labels for block, challenge, CAPTCHA, rate limit, and reset.
 - One replaceable **WAF Detector: current assessment** issue per observed
   origin, including a no-indicators state after its first eligible response.
-- Compact, grouped settings plus searchable rule/probe controls with visible-only
-  bulk enablement and persistent state.
+- Font-height settings plus searchable, collapsible rule/probe groups with
+  matched-only bulk enablement and persistent state.
 - No third-party Python runtime dependencies.
 
 ## Quick start

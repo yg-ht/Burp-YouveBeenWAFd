@@ -11,18 +11,27 @@ The **WAF Detector** suite tab exposes **Settings**, **Detection Rules**, and
 live state is changed.
 
 Settings are grouped into **Detection**, **Active probing**, and **Size and
-inspection limits**. Controls use their natural Swing height and remain pinned
-to the top of the scroll view, so resizing Burp does not stretch text fields.
+inspection limits**. GridBag constraints allow horizontal growth but prohibit
+vertical fill, so controls retain their look-and-feel font height even when
+Burp gives the tab substantial vertical space.
 
-Both catalogue tabs provide a text filter, a visible/total count, **Show all**,
-and **Enable visible**/**Disable visible** actions. Press Enter in the filter or
-select **Apply** to update the list. Space-separated terms are combined: every
+Detection rules are divided into generic and provider sections. Active probes
+are divided into SQL injection, cross-site scripting, path/inclusion/SSRF,
+command/template/runtime, structured-parser/content-type, HTTP/protocol,
+multipart/cookie/header, size/boundary, and provider-profile sections. Sections
+start collapsed and expose **Expand all** and **Collapse all** controls.
+
+Both catalogue tabs provide a text filter, a matched/total count, **Show all**,
+and **Enable matches**/**Disable matches** actions. Press Enter in the filter or
+select **Apply** to update the list. Matching sections expand automatically and
+sections without matches are hidden. Space-separated terms are combined: every
 term must occur in the row's searchable metadata. Rule searches include name,
-ID, evidence group, and tags. Probe searches include name, ID, provider,
-action, method, placement, content type, and classification.
+ID, evidence group, and tags. Probe searches include name, ID, provider, action,
+method, placement, content type, and classification.
 
-Filtering and bulk selection are local UI operations. Checkbox changes are not
-persisted and do not alter live detector state until **Save settings** is used.
+Filtering, expansion, and bulk selection are local UI operations. Checkbox
+changes are not persisted and do not alter live detector state until **Save
+settings** is used.
 
 ## Extension settings
 
