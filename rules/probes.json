@@ -5,190 +5,954 @@
       "id": "generic.xss-script",
       "name": "XSS-shaped script tag",
       "value": "<script>alert(1)</script>",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva", "fortiweb", "barracuda", "radware", "sucuri", "fastly"],
-      "actions": ["block", "challenge", "captcha"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb",
+        "barracuda",
+        "radware",
+        "sucuri",
+        "fastly"
+      ],
+      "actions": [
+        "block",
+        "challenge",
+        "captcha"
+      ]
     },
     {
       "id": "generic.sqli-boolean",
       "name": "SQL-injection-shaped boolean",
       "value": "' OR '1'='1",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva", "fortiweb", "barracuda", "radware", "sucuri", "fastly"],
-      "actions": ["block", "challenge", "captcha"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb",
+        "barracuda",
+        "radware",
+        "sucuri",
+        "fastly"
+      ],
+      "actions": [
+        "block",
+        "challenge",
+        "captcha"
+      ]
     },
     {
       "id": "generic.traversal-marker",
       "name": "Path traversal-shaped non-existent target",
       "value": "../../../../wafd-nonexistent-marker",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva", "fortiweb", "barracuda", "radware", "sucuri", "fastly"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb",
+        "barracuda",
+        "radware",
+        "sucuri",
+        "fastly"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.rate-limit-sequence",
       "name": "Bounded repeated marker for rate-limit behaviour",
       "value": "wafd-rate-limit-marker",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "akamai", "imperva", "fortiweb"],
-      "actions": ["rate_limit"],
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "akamai",
+        "imperva",
+        "fortiweb"
+      ],
+      "actions": [
+        "rate_limit"
+      ],
       "repeat": 5,
-      "safe_methods": ["GET", "HEAD", "OPTIONS"]
+      "safe_methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ]
     },
     {
       "id": "generic.angle-encoding",
       "name": "Encoded angle-bracket parser probe",
       "value": "<wafd-probe>",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva", "fortiweb"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.json-script-fragment",
       "name": "JSON script-fragment probe",
       "value": "{\"value\":\"<script>alert(1)</script>\"}",
-      "providers": ["aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "imperva"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.xss-attribute",
       "name": "XSS attribute-context probe",
       "value": "\" onmouseover=alert(1) x=\"",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.xss-encoded",
       "name": "Encoded XSS parser probe",
       "value": "%253Cscript%253Ealert%25281%2529%253C%252Fscript%253E",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.sqli-comment",
       "name": "SQL comment probe",
       "value": "1'/**/OR/**/1=1--",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.sqli-union-shaped",
       "name": "SQL UNION-shaped probe",
       "value": "1 UNION SELECT NULL--",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.traversal-encoded",
       "name": "Double-encoded traversal marker",
       "value": "..%252f..%252f..%252fwafd-nonexistent-marker",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva", "fortiweb"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
     {
       "id": "generic.traversal-backslash",
       "name": "Backslash traversal marker",
       "value": "..\\\\..\\\\..\\\\wafd-nonexistent-marker",
-      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva", "fortiweb"],
-      "actions": ["block", "challenge"]
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva",
+        "fortiweb"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
     },
-    {"id":"generic.sqli-quote-comment","name":"SQL quote comment probe","value":"1'--","providers":["cloudflare","aws-waf","azure-waf","google-cloud-armor","modsecurity","f5","akamai","imperva"],"actions":["block","challenge"]},
-    {"id":"generic.sqli-unquoted-boolean","name":"SQL unquoted boolean probe","value":"1 OR 1=1","providers":["cloudflare","aws-waf","azure-waf","google-cloud-armor","modsecurity","f5","akamai","imperva"],"actions":["block","challenge"]},
-    {"id":"generic.sqli-expression","name":"SQL expression probe","value":"ASCII(SUBSTRING(name,1,1))","providers":["cloudflare","aws-waf","azure-waf","google-cloud-armor","modsecurity"],"actions":["block","challenge"]},
-    {"id":"generic.xss-html","name":"HTML element probe","value":"<h1>WAFTEST</h1>","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5","akamai","imperva"],"actions":["block","challenge"]},
-    {"id":"generic.xss-event","name":"XSS event-handler probe","value":"<img src=x onerror=alert(1)>","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5","akamai","imperva"],"actions":["block","challenge"]},
-    {"id":"generic.xss-javascript-uri","name":"JavaScript URI probe","value":"javascript:alert(1)","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block","challenge"]},
-    {"id":"generic.xss-svg","name":"SVG event-handler probe","value":"<svg onload=alert(1)>","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block","challenge"]},
-    {"id":"generic.traversal-unix","name":"Unix traversal reference profile","value":"../../../../etc/passwd","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5","akamai","imperva"],"actions":["block","challenge"],"enabled":false,"profile":{"safety":"requires inert text-only endpoint"}},
-    {"id":"generic.traversal-windows","name":"Windows traversal reference profile","value":"..\\\\..\\\\..\\\\Windows\\\\win.ini","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5","akamai"],"actions":["block","challenge"],"enabled":false,"profile":{"safety":"requires inert text-only endpoint"}},
-    {"id":"generic.lfi-null","name":"LFI null-byte-shaped probe","value":"waf-test.txt%00.png","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block"],"enabled":false,"profile":{"safety":"requires inert text-only endpoint"}},
-    {"id":"generic.rfi-invalid","name":"Remote-file inclusion invalid-domain marker","value":"https://example.invalid/waf-test.txt","providers":["cloudflare","aws-waf","azure-waf","google-cloud-armor","modsecurity"],"actions":["block","challenge"],"profile":{"safety":"endpoint must not fetch remote resources"}},
-    {"id":"generic.ssrf-documentation","name":"SSRF documentation-address marker","value":"http://192.0.2.1/waf-test","providers":["cloudflare","aws-waf","azure-waf","google-cloud-armor","modsecurity"],"actions":["block","challenge"],"profile":{"safety":"endpoint must not fetch remote resources"}},
-    {"id":"generic.command-marker","name":"Command marker probe","value":"WAFTEST;echo WAFTEST","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5","fortiweb"],"actions":["block","challenge"],"enabled":false,"profile":{"safety":"requires inert text-only endpoint"}},
-    {"id":"generic.template-marker","name":"Template expression probe","value":"{{7*7}}","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block","challenge"]},
-    {"id":"generic.el-marker","name":"Expression-language probe","value":"${7*7}","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block","challenge"]},
-    {"id":"generic.php-filter","name":"PHP stream marker","value":"php://filter/resource=waf-test.txt","providers":["cloudflare","aws-waf","modsecurity"],"actions":["block"],"enabled":false,"profile":{"safety":"requires inert text-only endpoint"}},
-    {"id":"generic.java-serialisation-marker","name":"Non-executable Java serialisation marker","value":"aced00057372000757414654455354","providers":["cloudflare","aws-waf","modsecurity","f5"],"actions":["block"],"profile":{"safety":"printable marker only; no gadget chain"}},
-    {"id":"generic.xml-safe-entity","name":"Safe internal XML entity probe","value":"<!DOCTYPE test [<!ENTITY waf \"WAFTEST\">]><test>&waf;</test>","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5"],"actions":["block","challenge"],"enabled":false,"profile":{"content_types":["application/xml","text/xml","application/soap+xml"],"safety":"no external entities"}},
-    {"id":"generic.crlf-marker","name":"CRLF-shaped marker","value":"WAFTEST%0D%0A X-WAF-Test: 1","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block"],"enabled":false},
-    {"id":"generic.invalid-percent","name":"Invalid percent encoding","value":"%ZZ","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block"],"profile":{"classification":"malformed-request"}},
-    {"id":"generic.empty-value","name":"Empty-value parser probe","value":"&","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block"],"enabled":false}
-    ,{"id":"generic.graphql-variable","name":"GraphQL variable probe","value":"{\"query\":\"query($q:String!){echo(q:$q)}\",\"variables\":{\"q\":\"<script>alert(1)</script>\"}}","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block","challenge"],"safe_methods":["POST"],"enabled":false,"profile":{"content_type":"application/json","endpoint":"inert GraphQL echo"}}
-    ,{"id":"generic.graphql-query","name":"GraphQL query-text probe","value":"{ echo(value: \"' OR '1'='1\") }","providers":["cloudflare","aws-waf","modsecurity"],"actions":["block","challenge"],"safe_methods":["POST"],"enabled":false,"profile":{"content_types":["application/json","application/graphql"]}}
-    ,{"id":"generic.multipart-field","name":"Multipart suspicious field probe","value":"<script>alert(1)</script>","providers":["cloudflare","aws-waf","azure-waf","modsecurity","f5"],"actions":["block","challenge"],"safe_methods":["POST"],"enabled":false,"profile":{"content_type":"multipart/form-data","field":"description","discard_uploads":true}}
-    ,{"id":"generic.header-marker","name":"Suspicious header value probe","value":"<script>alert(1)</script>","providers":["cloudflare","aws-waf","azure-waf","modsecurity"],"actions":["block","challenge"],"enabled":false,"profile":{"insertion_points":["header"],"header":"X-WAF-Test"}}
-    ,{"id":"generic.cookie-marker","name":"Suspicious cookie value probe","value":"<script>alert(1)</script>","providers":["cloudflare","aws-waf","azure-waf","modsecurity","imperva"],"actions":["block","challenge"],"enabled":false,"profile":{"insertion_points":["cookie"],"cookie":"waf_test"}}
-    ,{
+    {
+      "id": "generic.sqli-quote-comment",
+      "name": "SQL quote comment probe",
+      "value": "1'--",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.sqli-unquoted-boolean",
+      "name": "SQL unquoted boolean probe",
+      "value": "1 OR 1=1",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.sqli-expression",
+      "name": "SQL expression probe",
+      "value": "ASCII(SUBSTRING(name,1,1))",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.xss-html",
+      "name": "HTML element probe",
+      "value": "<h1>WAFTEST</h1>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.xss-event",
+      "name": "XSS event-handler probe",
+      "value": "<img src=x onerror=alert(1)>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.xss-javascript-uri",
+      "name": "JavaScript URI probe",
+      "value": "javascript:alert(1)",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.xss-svg",
+      "name": "SVG event-handler probe",
+      "value": "<svg onload=alert(1)>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.traversal-unix",
+      "name": "Unix traversal reference profile",
+      "value": "../../../../etc/passwd",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "enabled": false,
+      "profile": {
+        "safety": "requires inert text-only endpoint"
+      }
+    },
+    {
+      "id": "generic.traversal-windows",
+      "name": "Windows traversal reference profile",
+      "value": "..\\\\..\\\\..\\\\Windows\\\\win.ini",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "akamai"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "enabled": false,
+      "profile": {
+        "safety": "requires inert text-only endpoint"
+      }
+    },
+    {
+      "id": "generic.lfi-null",
+      "name": "LFI null-byte-shaped probe",
+      "value": "waf-test.txt%00.png",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block"
+      ],
+      "enabled": false,
+      "profile": {
+        "safety": "requires inert text-only endpoint"
+      }
+    },
+    {
+      "id": "generic.rfi-invalid",
+      "name": "Remote-file inclusion invalid-domain marker",
+      "value": "https://example.invalid/waf-test.txt",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "profile": {
+        "safety": "endpoint must not fetch remote resources"
+      }
+    },
+    {
+      "id": "generic.ssrf-documentation",
+      "name": "SSRF documentation-address marker",
+      "value": "http://192.0.2.1/waf-test",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "google-cloud-armor",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "profile": {
+        "safety": "endpoint must not fetch remote resources"
+      }
+    },
+    {
+      "id": "generic.command-marker",
+      "name": "Command marker probe",
+      "value": "WAFTEST;echo WAFTEST",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5",
+        "fortiweb"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "enabled": false,
+      "profile": {
+        "safety": "requires inert text-only endpoint"
+      }
+    },
+    {
+      "id": "generic.template-marker",
+      "name": "Template expression probe",
+      "value": "{{7*7}}",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.el-marker",
+      "name": "Expression-language probe",
+      "value": "${7*7}",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ]
+    },
+    {
+      "id": "generic.php-filter",
+      "name": "PHP stream marker",
+      "value": "php://filter/resource=waf-test.txt",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block"
+      ],
+      "enabled": false,
+      "profile": {
+        "safety": "requires inert text-only endpoint"
+      }
+    },
+    {
+      "id": "generic.java-serialisation-marker",
+      "name": "Non-executable Java serialisation marker",
+      "value": "aced00057372000757414654455354",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "modsecurity",
+        "f5"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "safety": "printable marker only; no gadget chain"
+      }
+    },
+    {
+      "id": "generic.xml-safe-entity",
+      "name": "Safe internal XML entity probe",
+      "value": "<!DOCTYPE test [<!ENTITY waf \"WAFTEST\">]><test>&waf;</test>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "enabled": false,
+      "profile": {
+        "content_types": [
+          "application/xml",
+          "text/xml",
+          "application/soap+xml"
+        ],
+        "safety": "no external entities"
+      }
+    },
+    {
+      "id": "generic.crlf-marker",
+      "name": "CRLF-shaped marker",
+      "value": "WAFTEST%0D%0A X-WAF-Test: 1",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "generic.invalid-percent",
+      "name": "Invalid percent encoding",
+      "value": "%ZZ",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "classification": "malformed-request"
+      }
+    },
+    {
+      "id": "generic.empty-value",
+      "name": "Empty-value parser probe",
+      "value": "&",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "generic.graphql-variable",
+      "name": "GraphQL variable probe",
+      "value": "{\"query\":\"query($q:String!){echo(q:$q)}\",\"variables\":{\"q\":\"<script>alert(1)</script>\"}}",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "safe_methods": [
+        "POST"
+      ],
+      "enabled": false,
+      "profile": {
+        "content_type": "application/json",
+        "endpoint": "inert GraphQL echo"
+      }
+    },
+    {
+      "id": "generic.graphql-query",
+      "name": "GraphQL query-text probe",
+      "value": "{ echo(value: \"' OR '1'='1\") }",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "safe_methods": [
+        "POST"
+      ],
+      "enabled": false,
+      "profile": {
+        "content_types": [
+          "application/json",
+          "application/graphql"
+        ]
+      }
+    },
+    {
+      "id": "generic.multipart-field",
+      "name": "Multipart suspicious field probe",
+      "value": "<script>alert(1)</script>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "f5"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "safe_methods": [
+        "POST"
+      ],
+      "enabled": false,
+      "profile": {
+        "content_type": "multipart/form-data",
+        "field": "description",
+        "discard_uploads": true
+      }
+    },
+    {
+      "id": "generic.header-marker",
+      "name": "Suspicious header value probe",
+      "value": "<script>alert(1)</script>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "enabled": false,
+      "profile": {
+        "insertion_points": [
+          "header"
+        ],
+        "header": "X-WAF-Test"
+      }
+    },
+    {
+      "id": "generic.cookie-marker",
+      "name": "Suspicious cookie value probe",
+      "value": "<script>alert(1)</script>",
+      "providers": [
+        "cloudflare",
+        "aws-waf",
+        "azure-waf",
+        "modsecurity",
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge"
+      ],
+      "enabled": false,
+      "profile": {
+        "insertion_points": [
+          "cookie"
+        ],
+        "cookie": "waf_test"
+      }
+    },
+    {
       "id": "cloudflare.challenge-profile",
       "name": "Cloudflare HTML challenge profile",
       "value": "<script>alert(1)</script>",
-      "providers": ["cloudflare"], "actions": ["challenge", "block"],
-      "profile": {"accept": "text/html", "expected_headers": ["cf-mitigated", "cf-ray"]}
+      "providers": [
+        "cloudflare"
+      ],
+      "actions": [
+        "challenge",
+        "block"
+      ],
+      "profile": {
+        "accept": "text/html",
+        "expected_headers": [
+          "cf-mitigated",
+          "cf-ray"
+        ]
+      }
     },
     {
       "id": "aws.challenge-profile",
       "name": "AWS WAF challenge profile",
       "value": "<script>alert(1)</script>",
-      "providers": ["aws-waf"], "actions": ["challenge", "captcha"],
-      "profile": {"accept": "text/html", "expected_headers": ["x-amzn-waf-action"], "expected_status": [202, 405]}
+      "providers": [
+        "aws-waf"
+      ],
+      "actions": [
+        "challenge",
+        "captcha"
+      ],
+      "profile": {
+        "accept": "text/html",
+        "expected_headers": [
+          "x-amzn-waf-action"
+        ],
+        "expected_status": [
+          202,
+          405
+        ]
+      }
     },
     {
       "id": "azure.frontdoor-debug-profile",
       "name": "Azure Front Door diagnostic profile",
       "value": "<script>alert(1)</script>",
-      "providers": ["azure-waf"], "actions": ["block"],
-      "profile": {"request_headers": {"X-Azure-DebugInfo": "1"}, "expected_headers": ["x-azure-ref"]}
+      "providers": [
+        "azure-waf"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "request_headers": {
+          "X-Azure-DebugInfo": "1"
+        },
+        "expected_headers": [
+          "x-azure-ref"
+        ]
+      }
     },
     {
       "id": "azure.gateway-json-profile",
       "name": "Azure Application Gateway JSON-body profile",
       "value": "{\"displayName\":\"<script>alert(1)</script>\",\"enabled\":true}",
-      "providers": ["azure-waf"], "actions": ["block"], "safe_methods": ["POST"], "enabled": false,
-      "profile": {"content_type": "application/json", "expected_body_terms": ["microsoft-azure-application-gateway/v2", "transaction"]}
+      "providers": [
+        "azure-waf"
+      ],
+      "actions": [
+        "block"
+      ],
+      "safe_methods": [
+        "POST"
+      ],
+      "enabled": false,
+      "profile": {
+        "content_type": "application/json",
+        "expected_body_terms": [
+          "microsoft-azure-application-gateway/v2",
+          "transaction"
+        ]
+      }
     },
     {
       "id": "azure.gateway-size-profile",
       "name": "Azure Application Gateway request-size profile",
       "value": "wafd-size-limit-marker",
-      "providers": ["azure-waf"], "actions": ["block"], "safe_methods": ["POST"], "enabled": false,
-      "profile": {"content_type": "application/octet-stream", "body_size": "configured-limit-plus-one", "expected_status": [413]}
+      "providers": [
+        "azure-waf"
+      ],
+      "actions": [
+        "block"
+      ],
+      "safe_methods": [
+        "POST"
+      ],
+      "enabled": false,
+      "profile": {
+        "content_type": "application/octet-stream",
+        "body_size": "configured-limit-plus-one",
+        "expected_status": [
+          413
+        ]
+      }
     },
     {
       "id": "google.differential-404-profile",
       "name": "Google Cloud Armor differential-404 profile",
       "value": "' OR '1'='1",
-      "providers": ["google-cloud-armor"], "actions": ["block", "rate_limit"],
-      "profile": {"expected_status": [404, 429], "note": "External response cannot prove denied_by_security_policy without logs"}
+      "providers": [
+        "google-cloud-armor"
+      ],
+      "actions": [
+        "block",
+        "rate_limit"
+      ],
+      "profile": {
+        "expected_status": [
+          404,
+          429
+        ],
+        "note": "External response cannot prove denied_by_security_policy without logs"
+      }
     },
     {
       "id": "modsecurity.crs-xss-profile",
       "name": "ModSecurity CRS XSS profile",
       "value": "<script>alert('CRS Sandbox Release')</script>",
-      "providers": ["modsecurity"], "actions": ["block"],
-      "profile": {"expected_body_terms": ["941100", "941110", "949110"], "diagnostic_header": "X-Format-Output"}
+      "providers": [
+        "modsecurity"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "expected_body_terms": [
+          "941100",
+          "941110",
+          "949110"
+        ],
+        "diagnostic_header": "X-Format-Output"
+      }
     },
     {
       "id": "f5.support-id-profile",
       "name": "F5 support-ID rejection profile",
       "value": "<script>alert(1)</script>",
-      "providers": ["f5"], "actions": ["block"],
-      "profile": {"expected_body_terms": ["requested url was rejected", "support id"]}
+      "providers": [
+        "f5"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "expected_body_terms": [
+          "requested url was rejected",
+          "support id"
+        ]
+      }
     },
     {
       "id": "akamai.reference-profile",
       "name": "Akamai edge reference profile",
       "value": "<script>alert(1)</script>",
-      "providers": ["akamai"], "actions": ["block"],
-      "profile": {"expected_headers": ["server: AkamaiGHost"], "expected_body_terms": ["access denied", "reference #"]}
+      "providers": [
+        "akamai"
+      ],
+      "actions": [
+        "block"
+      ],
+      "profile": {
+        "expected_headers": [
+          "server: AkamaiGHost"
+        ],
+        "expected_body_terms": [
+          "access denied",
+          "reference #"
+        ]
+      }
     },
     {
       "id": "imperva.incident-profile",
       "name": "Imperva incident-ID profile",
       "value": "' OR '1'='1",
-      "providers": ["imperva"], "actions": ["block", "challenge", "captcha"],
-      "profile": {"expected_body_terms": ["request unsuccessful", "incapsula incident id"]}
+      "providers": [
+        "imperva"
+      ],
+      "actions": [
+        "block",
+        "challenge",
+        "captcha"
+      ],
+      "profile": {
+        "expected_body_terms": [
+          "request unsuccessful",
+          "incapsula incident id"
+        ]
+      }
     },
     {
       "id": "fortiweb.reset-profile",
       "name": "FortiWeb reset-behaviour profile",
       "value": "<script>alert(1)</script>",
-      "providers": ["fortiweb"], "actions": ["block", "reset"],
-      "profile": {"expected_connection_states": ["reset", "no-response"]}
+      "providers": [
+        "fortiweb"
+      ],
+      "actions": [
+        "block",
+        "reset"
+      ],
+      "profile": {
+        "expected_connection_states": [
+          "reset",
+          "no-response"
+        ]
+      }
     }
   ]
 }
