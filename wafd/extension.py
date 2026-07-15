@@ -35,7 +35,7 @@ class WafExtension(object):
         """Burp entry point; registration failures are reported to Burp output."""
         self.callbacks = callbacks
         self.helpers = callbacks.getHelpers()
-        callbacks.setExtensionName("Burp WAF Detector")
+        callbacks.setExtensionName("WAF Detector")
         self.catalogue = self._load_default_catalogue()
         probe_catalogue = ProbeCatalogue.bundled()
         self._load_configuration()
