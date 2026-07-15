@@ -132,6 +132,17 @@ class WafExtension(object):
         return max(90, min(int(preferred_width) + 24, 180))
 
     @staticmethod
+    def _tab_layout_properties():
+        """Return FlatLaf properties which prevent full-width tab stretching."""
+        # Burp may configure FlatLaf to fill the available tab strip.  A
+        # bounded child label does not change that enclosing tab-cell layout,
+        # so the pane itself must request leading, preferred-width cells.
+        return {
+            "JTabbedPane.tabAreaAlignment": "leading",
+            "JTabbedPane.tabWidthMode": "preferred",
+        }
+
+    @staticmethod
     def _rule_group(rule):
         """Return a stable provider or generic section for a detection rule."""
         provider_groups = (
@@ -278,6 +289,12 @@ class WafExtension(object):
                 # complete 200+ probe set remains practical to navigate.
                 tabs = JTabbedPane()
                 tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT)
+
+                # Apply layout policy to the tab pane, rather than relying on
+                # the child header's maximum size.  FlatLaf's fill alignment
+                # otherwise stretches the cells across Burp's full tab strip.
+                for property_name, property_value in self._tab_layout_properties().items():
+                    tabs.putClientProperty(property_name, property_value)
 
                 def add_compact_tab(title, component):
                     tabs.addTab(title, component)

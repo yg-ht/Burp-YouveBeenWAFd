@@ -8,8 +8,10 @@ Configuration is split between:
 
 The **WAF Detector** suite tab exposes **Settings**, **Detection Rules**, and
 **Active Probes**. Saving validates the complete settings object before any
-live state is changed. Their custom tab headers retain natural title widths,
-bounded from 90 to 180 pixels, instead of stretching across the full tab bar.
+live state is changed. The tab pane explicitly uses leading alignment and
+preferred-width cells, while its custom headers remain bounded from 90 to 180
+pixels. This prevents Burp's look and feel from stretching the cells across the
+full tab bar.
 
 Settings are grouped into **Detection**, **Active probing**, and **Size and
 inspection limits**. GridBag constraints allow horizontal growth but prohibit
