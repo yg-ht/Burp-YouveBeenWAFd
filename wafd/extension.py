@@ -34,7 +34,9 @@ class WafExtension(object):
         self._load_configuration()
         self.detector = ResponseDetector(self.catalogue)
         self.assessments = AssessmentStore(self.catalogue.rules, self.configuration.threshold)
-        self.probes = ProbePlanner(self.configuration.max_probes)
+        # Non-GET probe profiles are permitted only when their catalogue entry
+        # explicitly allows the method; the target policy controls the path.
+        self.probes = ProbePlanner(self.configuration.max_probes, allow_non_idempotent=True)
         callbacks.registerHttpListener(self)
         callbacks.registerScannerCheck(self)
         callbacks.registerContextMenuFactory(self)
@@ -173,9 +175,23 @@ class WafExtension(object):
             request_info = self.helpers.analyzeRequest(baseRequestResponse)
             name = insertionPoint.getInsertionPointName()
             probe_entries = self.probes.plan_entries(request_info.getMethod(), name)
+            method = str(request_info.getMethod()).upper()
+            root_mode = (method not in ("GET", "HEAD", "OPTIONS") and
+                         self.configuration.non_get_target == "root")
+            control = baseRequestResponse
+            root_headers = list(request_info.getHeaders())
+            if root_mode:
+                root_headers[0] = "%s / HTTP/1.1" % method
+                control_request = self.helpers.buildHttpMessage(root_headers, "")
+                control = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), control_request)
+                if control is None or control.getResponse() is None:
+                    control = baseRequestResponse
             results = []
             for probe in probe_entries:
-                request = insertionPoint.buildRequest(probe.value.encode("utf-8"))
+                if root_mode:
+                    request = self.helpers.buildHttpMessage(root_headers, probe.value.encode("utf-8"))
+                else:
+                    request = insertionPoint.buildRequest(probe.value.encode("utf-8"))
                 request = self._apply_probe_profile(request, probe.profile)
                 response = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), request)
                 if response is None or response.getResponse() is None:
@@ -190,8 +206,8 @@ class WafExtension(object):
                     continue
                 response_info = self.helpers.analyzeResponse(response.getResponse())
                 normalised = self._normalise_response(response.getResponse(), response_info)
-                baseline_info = self.helpers.analyzeResponse(baseRequestResponse.getResponse())
-                baseline = self._normalise_response(baseRequestResponse.getResponse(), baseline_info)
+                baseline_info = self.helpers.analyzeResponse(control.getResponse())
+                baseline = self._normalise_response(control.getResponse(), baseline_info)
                 origin = self._origin(request_info.getUrl())
                 evidence = self.detector.detect(origin, normalised, "active", baseline)
                 self.assessments.observe(origin, evidence, response)
