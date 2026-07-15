@@ -93,11 +93,11 @@ class ResponseDetector(object):
                 header_match = str(matcher.get("header_contains", "")).lower() in value.lower()
                 body_match = all(str(term).lower() in body for term in matcher.get("body_terms", []))
                 regex = matcher.get("body_regex")
-                regex_match = bool(re.search(regex, body, re.I)) if regex else True
+                regex_match = bool(re.search(regex, body, re.I | re.S)) if regex else True
                 matched = header_match and body_match and regex_match
                 detail = "vendor response marker and behavioural block content matched"
             elif kind == "body_regex":
-                matched = bool(re.search(str(matcher.get("pattern", "")), body, re.I))
+                matched = bool(re.search(str(matcher.get("pattern", "")), body, re.I | re.S))
                 detail = "response body matched a vendor block template"
             if matched:
                 product = next((tag for tag in rule.tags if tag != "generic" and tag != "product"), "")
