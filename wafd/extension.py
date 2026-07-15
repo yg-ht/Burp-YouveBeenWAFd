@@ -35,7 +35,7 @@ class WafExtension(object):
         """Burp entry point; registration failures are reported to Burp output."""
         self.callbacks = callbacks
         self.helpers = callbacks.getHelpers()
-        callbacks.setExtensionName("Burp WAF Detector")
+        callbacks.setExtensionName("WAF Detector")
         self.catalogue = self._load_default_catalogue()
         probe_catalogue = ProbeCatalogue.bundled()
         self._load_configuration()
@@ -52,7 +52,7 @@ class WafExtension(object):
         callbacks.registerScannerCheck(self)
         callbacks.registerContextMenuFactory(self)
         callbacks.addSuiteTab(self)
-        callbacks.printOutput("Burp WAF Detector loaded with %d rules" % len(self.catalogue.rules))
+        callbacks.printOutput("WAF Detector loaded with %d rules" % len(self.catalogue.rules))
 
     def _load_default_catalogue(self):
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
