@@ -39,6 +39,13 @@ class ProbePlannerTests(unittest.TestCase):
             '{"id":"post","value":"x","safe_methods":["POST"]}]}')
         self.assertEqual(ProbePlanner(3, catalogue=catalogue).plan("GET", "query"), [])
 
+    def test_bundled_provider_profiles_include_safety_metadata(self):
+        catalogue = ProbeCatalogue.bundled()
+        profiles = dict((probe.probe_id, probe) for probe in catalogue.probes)
+        self.assertIn("aws.challenge-profile", profiles)
+        self.assertEqual(profiles["azure.gateway-size-profile"].enabled, False)
+        self.assertEqual(profiles["f5.support-id-profile"].profile["expected_body_terms"][1], "support id")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,7 @@ class Probe(object):
     """A raw insertion-point value and its expected WAF behaviours."""
 
     def __init__(self, value, providers, actions, probe_id, name, enabled=True,
-                 control_required=True, safe_methods=None, repeat=1):
+                 control_required=True, safe_methods=None, repeat=1, profile=None):
         self.value = value
         self.providers = tuple(providers)
         self.actions = tuple(actions)
@@ -18,6 +18,7 @@ class Probe(object):
         self.control_required = bool(control_required)
         self.safe_methods = tuple(safe_methods or ("GET", "HEAD", "OPTIONS"))
         self.repeat = max(1, min(int(repeat), 10))
+        self.profile = profile or {}
 
 
 class ProbeCatalogue(object):
@@ -46,7 +47,7 @@ class ProbeCatalogue(object):
             probes.append(Probe(value, item.get("providers", []), item.get("actions", []),
                                 item["id"], item.get("name", item["id"]), item.get("enabled", True),
                                 item.get("control_required", True), item.get("safe_methods"),
-                                item.get("repeat", 1)))
+                                item.get("repeat", 1), item.get("profile")))
         return cls(probes)
 
     @classmethod

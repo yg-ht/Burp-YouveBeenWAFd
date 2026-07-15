@@ -45,5 +45,82 @@
       "providers": ["aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "imperva"],
       "actions": ["block", "challenge"]
     }
+    ,{
+      "id": "cloudflare.challenge-profile",
+      "name": "Cloudflare HTML challenge profile",
+      "value": "<script>alert(1)</script>",
+      "providers": ["cloudflare"], "actions": ["challenge", "block"],
+      "profile": {"accept": "text/html", "expected_headers": ["cf-mitigated", "cf-ray"]}
+    },
+    {
+      "id": "aws.challenge-profile",
+      "name": "AWS WAF challenge profile",
+      "value": "<script>alert(1)</script>",
+      "providers": ["aws-waf"], "actions": ["challenge", "captcha"],
+      "profile": {"accept": "text/html", "expected_headers": ["x-amzn-waf-action"], "expected_status": [202, 405]}
+    },
+    {
+      "id": "azure.frontdoor-debug-profile",
+      "name": "Azure Front Door diagnostic profile",
+      "value": "<script>alert(1)</script>",
+      "providers": ["azure-waf"], "actions": ["block"],
+      "profile": {"request_headers": {"X-Azure-DebugInfo": "1"}, "expected_headers": ["x-azure-ref"]}
+    },
+    {
+      "id": "azure.gateway-json-profile",
+      "name": "Azure Application Gateway JSON-body profile",
+      "value": "{\"displayName\":\"<script>alert(1)</script>\",\"enabled\":true}",
+      "providers": ["azure-waf"], "actions": ["block"], "safe_methods": ["POST"], "enabled": false,
+      "profile": {"content_type": "application/json", "expected_body_terms": ["microsoft-azure-application-gateway/v2", "transaction"]}
+    },
+    {
+      "id": "azure.gateway-size-profile",
+      "name": "Azure Application Gateway request-size profile",
+      "value": "wafd-size-limit-marker",
+      "providers": ["azure-waf"], "actions": ["block"], "safe_methods": ["POST"], "enabled": false,
+      "profile": {"content_type": "application/octet-stream", "body_size": "configured-limit-plus-one", "expected_status": [413]}
+    },
+    {
+      "id": "google.differential-404-profile",
+      "name": "Google Cloud Armor differential-404 profile",
+      "value": "' OR '1'='1",
+      "providers": ["google-cloud-armor"], "actions": ["block", "rate_limit"],
+      "profile": {"expected_status": [404, 429], "note": "External response cannot prove denied_by_security_policy without logs"}
+    },
+    {
+      "id": "modsecurity.crs-xss-profile",
+      "name": "ModSecurity CRS XSS profile",
+      "value": "<script>alert('CRS Sandbox Release')</script>",
+      "providers": ["modsecurity"], "actions": ["block"],
+      "profile": {"expected_body_terms": ["941100", "941110", "949110"], "diagnostic_header": "X-Format-Output"}
+    },
+    {
+      "id": "f5.support-id-profile",
+      "name": "F5 support-ID rejection profile",
+      "value": "<script>alert(1)</script>",
+      "providers": ["f5"], "actions": ["block"],
+      "profile": {"expected_body_terms": ["requested url was rejected", "support id"]}
+    },
+    {
+      "id": "akamai.reference-profile",
+      "name": "Akamai edge reference profile",
+      "value": "<script>alert(1)</script>",
+      "providers": ["akamai"], "actions": ["block"],
+      "profile": {"expected_headers": ["server: AkamaiGHost"], "expected_body_terms": ["access denied", "reference #"]}
+    },
+    {
+      "id": "imperva.incident-profile",
+      "name": "Imperva incident-ID profile",
+      "value": "' OR '1'='1",
+      "providers": ["imperva"], "actions": ["block", "challenge", "captcha"],
+      "profile": {"expected_body_terms": ["request unsuccessful", "incapsula incident id"]}
+    },
+    {
+      "id": "fortiweb.reset-profile",
+      "name": "FortiWeb reset-behaviour profile",
+      "value": "<script>alert(1)</script>",
+      "providers": ["fortiweb"], "actions": ["block", "reset"],
+      "profile": {"expected_connection_states": ["reset", "no-response"]}
+    }
   ]
 }
