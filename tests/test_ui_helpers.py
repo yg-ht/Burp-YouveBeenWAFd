@@ -38,16 +38,13 @@ class CatalogueFilterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             WafExtension._non_get_target_value("unclear option")
 
-    def test_tab_header_width_is_padded_and_bounded(self):
-        self.assertEqual(90, WafExtension._tab_header_width(20))
-        self.assertEqual(144, WafExtension._tab_header_width(120))
-        self.assertEqual(180, WafExtension._tab_header_width(500))
+    def test_tab_content_column_has_a_readable_maximum_width(self):
+        self.assertEqual(960, WafExtension._tab_content_width())
 
-    def test_tab_layout_prevents_look_and_feel_from_filling_tab_bar(self):
-        properties = WafExtension._tab_layout_properties()
-
-        self.assertEqual("leading", properties["JTabbedPane.tabAreaAlignment"])
-        self.assertEqual("preferred", properties["JTabbedPane.tabWidthMode"])
+    def test_tab_content_width_caps_wide_content_and_preserves_narrow_content(self):
+        self.assertEqual(640, WafExtension._tab_content_width(640))
+        self.assertEqual(960, WafExtension._tab_content_width(1920))
+        self.assertEqual(0, WafExtension._tab_content_width(-1))
 
     def test_rules_are_grouped_by_provider_or_generic_behaviour(self):
         cloudflare = Rule("cf", "Cloudflare", "edge", 10,
