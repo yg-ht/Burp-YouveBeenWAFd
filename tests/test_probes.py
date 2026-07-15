@@ -1,6 +1,6 @@
 import unittest
 
-from wafd.probes import ProbePlanner
+from wafd.probes import ProbeCatalogue, ProbePlanner
 
 
 class ProbePlannerTests(unittest.TestCase):
@@ -15,6 +15,18 @@ class ProbePlannerTests(unittest.TestCase):
 
     def test_sensitive_insertion_points_are_skipped(self):
         self.assertEqual(ProbePlanner().plan("GET", "Cookie"), [])
+
+    def test_catalogue_is_external_and_provider_filterable(self):
+        catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+            '{"id":"cf","name":"CF","value":"x","providers":["cloudflare"]},'
+            '{"id":"aws","name":"AWS","value":"y","providers":["aws-waf"]}]}')
+        planner = ProbePlanner(3, catalogue=catalogue)
+        self.assertEqual(planner.plan("GET", "query", ["aws-waf"]), ["y"])
+
+    def test_duplicate_probe_ids_are_rejected(self):
+        with self.assertRaises(ValueError):
+            ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+                '{"id":"x","value":"1"},{"id":"x","value":"2"}]}')
 
 
 if __name__ == "__main__":

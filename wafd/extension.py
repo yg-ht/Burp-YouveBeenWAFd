@@ -19,7 +19,7 @@ class WafExtension(object):
         self.catalogue = None
         self.detector = None
         self.assessments = None
-        self.probes = ProbePlanner()
+        self.probes = None
         self.configuration = Configuration()
         self._panel = None
 

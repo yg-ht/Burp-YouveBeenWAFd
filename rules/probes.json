@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "probes": [
+    {
+      "id": "generic.xss-script",
+      "name": "XSS-shaped script tag",
+      "value": "<script>alert(1)</script>",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva", "fortiweb", "barracuda", "radware", "sucuri", "fastly"],
+      "actions": ["block", "challenge", "captcha"]
+    },
+    {
+      "id": "generic.sqli-boolean",
+      "name": "SQL-injection-shaped boolean",
+      "value": "' OR '1'='1",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva", "fortiweb", "barracuda", "radware", "sucuri", "fastly"],
+      "actions": ["block", "challenge", "captcha"]
+    },
+    {
+      "id": "generic.traversal-marker",
+      "name": "Path traversal-shaped non-existent target",
+      "value": "../../../../wafd-nonexistent-marker",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "akamai", "imperva", "fortiweb", "barracuda", "radware", "sucuri", "fastly"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.angle-encoding",
+      "name": "Encoded angle-bracket parser probe",
+      "value": "<wafd-probe>",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "modsecurity", "f5", "akamai", "imperva", "fortiweb"],
+      "actions": ["block", "challenge"]
+    },
+    {
+      "id": "generic.json-script-fragment",
+      "name": "JSON script-fragment probe",
+      "value": "{\"value\":\"<script>alert(1)</script>\"}",
+      "providers": ["aws-waf", "azure-waf", "google-cloud-armor", "modsecurity", "f5", "imperva"],
+      "actions": ["block", "challenge"]
+    }
+  ]
+}
