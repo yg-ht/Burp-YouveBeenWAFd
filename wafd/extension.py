@@ -32,6 +32,8 @@ class WafExtension(object):
         callbacks.setExtensionName("Burp WAF Detector")
         self.catalogue = self._load_default_catalogue()
         self._load_configuration()
+        # The adapter owns Burp objects; the detector, scorer and planner stay
+        # independent so their behaviour can be tested under CPython.
         self.detector = ResponseDetector(self.catalogue)
         self.assessments = AssessmentStore(self.catalogue.rules, self.configuration.threshold)
         # Non-GET probe profiles are permitted only when their catalogue entry
@@ -55,6 +57,8 @@ class WafExtension(object):
             try:
                 self.configuration = Configuration.from_json(saved)
             except (ValueError, TypeError):
+                # Continue with validated defaults instead of preventing the
+                # extension from loading because a saved setting is stale.
                 self.callbacks.printError("WAF Detector ignored invalid saved configuration")
 
     def save_configuration(self):
@@ -86,6 +90,9 @@ class WafExtension(object):
                 rules_panel.setBorder(BorderFactory.createTitledBorder("Detection rules"))
                 checkboxes = []
                 for rule in self.catalogue.rules:
+                    # Rule enablement is deliberately user-selectable because
+                    # fingerprints and acceptable false-positive rates vary by
+                    # engagement.
                     checkbox = JCheckBox("%s [%s] (weight %.0f)" %
                                          (rule.name, rule.rule_id, rule.weight), rule.enabled)
                     checkboxes.append((rule, checkbox))
@@ -93,6 +100,8 @@ class WafExtension(object):
                 self._panel.add(JScrollPane(rules_panel), BorderLayout.CENTER)
                 save = JButton("Save settings")
                 def save_settings(event):
+                    # Validate the complete editable state before persisting
+                    # it; a malformed threshold leaves current settings intact.
                     try:
                         self.configuration.threshold = self.configuration._threshold(threshold.getText())
                         self.configuration.enabled = enabled.isSelected()
@@ -133,6 +142,8 @@ class WafExtension(object):
         return getattr(self.callbacks, "TOOL_EXTENDER", object()) == tool_flag
 
     def _normalise_response(self, raw_response, response_info):
+        # Burp exposes headers as name/value objects. Normalising names here
+        # gives the core detector one predictable, case-insensitive contract.
         headers = {}
         for header in response_info.getHeaders():
             name = str(header.getName()).lower()
@@ -141,6 +152,8 @@ class WafExtension(object):
         if not isinstance(body, str):
             body = body.decode("utf-8", "replace")
         first_line = raw_response.splitlines()[0] if raw_response.splitlines() else ""
+        # Preserve HTTP/1.0, HTTP/1.1 and HTTP/2 for protocol-differential
+        # rules without relying on Burp-specific response objects downstream.
         match = re.match(r"HTTP/(\d(?:\.\d)?)", str(first_line))
         return build_fingerprint(response_info.getStatusCode(), headers, body[:1024 * 1024],
                                  match.group(1) if match else "")
@@ -151,6 +164,8 @@ class WafExtension(object):
         host = str(url.getHost()).lower()
         port = int(url.getPort())
         if port < 0:
+            # Explicit ports keep assessments for different services separate,
+            # including when java.net.URL omits the scheme's default port.
             port = 443 if protocol == "https" else 80
         return "%s://%s:%d" % (protocol, host, port)
 
@@ -159,6 +174,8 @@ class WafExtension(object):
         assessment = self.assessments.assessments[origin]
         score = self.assessments.engine.score(assessment.evidence)[0]
         confidence = "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
+        # Burp replaces earlier issues with the same identity via
+        # consolidateDuplicateIssues(), leaving one current assessment.
         issue = self.callbacks.makeScannerIssue(
             origin, "WAF Detector: current assessment", self.assessments.detail(origin),
             "Continue monitoring traffic and validate the suspected product manually.",
@@ -181,10 +198,15 @@ class WafExtension(object):
             control = baseRequestResponse
             root_headers = list(request_info.getHeaders())
             if root_mode:
+                # By default, non-GET probes target / rather than replaying a
+                # selected application action. The method is retained, while
+                # the body is replaced with the configured probe marker.
                 root_headers[0] = "%s / HTTP/1.1" % method
                 control_request = self.helpers.buildHttpMessage(root_headers, "")
                 control = self.callbacks.makeHttpRequest(baseRequestResponse.getHttpService(), control_request)
                 if control is None or control.getResponse() is None:
+                    # Falling back preserves scan availability, but means the
+                    # selected response is the control for this comparison.
                     control = baseRequestResponse
             results = []
             for probe in probe_entries:
@@ -232,6 +254,8 @@ class WafExtension(object):
         updated = []
         seen = set()
         for header in headers:
+            # Replace a declared header once while preserving all unrelated
+            # request headers and the original body bytes.
             name = str(header).split(":", 1)[0].strip().lower()
             if name in lowered:
                 updated.append("%s: %s" % (name, lowered[name]))
@@ -270,6 +294,10 @@ class WafExtension(object):
                 def getInsertionPointName(inner):
                     return "query"
                 def buildRequest(inner, payload):
+                    # Keep the original body while constructing the synthetic
+                    # insertion point. The current request-line manipulation
+                    # is documented as an adapter limitation pending a Burp
+                    # regression harness and a target-aware parser.
                     headers = list(request_info.getHeaders())
                     target = headers[0]
                     separator = "&" if "?" in target else "?"

@@ -20,6 +20,8 @@ class ResponseDetector(object):
         found = []
         headers = dict((str(key).lower(), str(value))
                        for key, value in response.get("headers", {}).items())
+        # Matching is case-insensitive and works on a body sample already
+        # bounded by the adapter/fingerprint layer.
         body = str(response.get("body", "")).lower()
         status = int(response.get("status", 0) or 0)
         for rule in self.catalogue.enabled():
@@ -42,6 +44,8 @@ class ResponseDetector(object):
                 matched = term is not None
                 detail = "response contains %s" % term if term else ""
             elif kind == "active_differential" and baseline is not None:
+                # Differential rules are meaningful only when an otherwise
+                # comparable control response is available.
                 matched = (int(baseline.get("status", 0) or 0) != status or
                            str(baseline.get("body", ""))[:512] != str(response.get("body", ""))[:512])
                 detail = "probe response differs from baseline"
@@ -51,6 +55,8 @@ class ResponseDetector(object):
                 matched = before not in blocked and status in blocked
                 detail = "baseline HTTP %d changed to blocked HTTP %d" % (before, status)
             elif kind == "body_similarity_drop" and baseline is not None:
+                # Bound both operands before SequenceMatcher to avoid costly
+                # comparisons against attacker-controlled response bodies.
                 before = str(baseline.get("body", ""))[:4096]
                 similarity = SequenceMatcher(None, before, str(response.get("body", ""))[:4096]).ratio()
                 matched = similarity < float(matcher.get("below", 0.5))
@@ -79,6 +85,8 @@ class ResponseDetector(object):
             elif kind == "challenge_transition" and baseline is not None:
                 challenge_terms = [str(term).lower() for term in matcher.get("terms", [])]
                 before_body = str(baseline.get("body", "")).lower()
+                # A status already present in the control is not a transition.
+                # Body terms likewise count only when introduced by the probe.
                 challenge_body = any(term in body and term not in before_body for term in challenge_terms)
                 challenge_status = (status in [int(value) for value in matcher.get("statuses", [])]
                                     and int(baseline.get("status", 0) or 0) not in
@@ -102,6 +110,9 @@ class ResponseDetector(object):
                 matched = bool(re.search(str(matcher.get("pattern", "")), body, re.I | re.S))
                 detail = "response body matched a vendor block template"
             if matched:
+                # Tags preserve separate product and action conclusions. Edge
+                # attribution therefore does not automatically imply that a
+                # managed WAF rule caused the response.
                 product = next((tag for tag in rule.tags if tag != "generic" and tag != "product"), "")
                 action = next((tag for tag in rule.tags if tag in
                                ("block", "challenge", "captcha", "rate_limit", "reset")), "")

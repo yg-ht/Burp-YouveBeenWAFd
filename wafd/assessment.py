@@ -21,6 +21,9 @@ class AssessmentStore(object):
 
     def observe(self, origin, evidence, representative_message=None):
         assessment = self.assessments.setdefault(origin, OriginAssessment(origin))
+        # A rule contributes only once per origin. This prevents frequently
+        # observed passive headers from overwhelming distinct behavioural
+        # evidence and keeps the stored assessment bounded.
         known = set(item.rule_id for item in assessment.evidence)
         for item in evidence:
             if item.rule_id not in known and len(assessment.evidence) < self.max_evidence:
@@ -35,6 +38,8 @@ class AssessmentStore(object):
         score, products = self.engine.score(assessment.evidence)
         product_names = sorted(products, key=lambda product: products[product], reverse=True)
         state = "WAF suspected" if score >= self.engine.threshold else "No WAF indicators detected"
+        # Every value that can originate in HTTP traffic is escaped before it
+        # reaches Burp's HTML issue renderer.
         safe_origin = html_escape(str(origin), quote=True)
         lines = ["<p><b>%s</b></p>" % html_escape(state),
                  "<p>Origin: %s<br>Confidence: %.0f%% (threshold %.0f%%)</p>" %

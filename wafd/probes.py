@@ -16,8 +16,15 @@ class Probe(object):
         self.name = name
         self.enabled = bool(enabled)
         self.control_required = bool(control_required)
+        # Method eligibility belongs to each probe. A missing allowlist uses
+        # the legacy idempotent-method default; there is no global bypass.
         self.safe_methods = tuple(safe_methods or ("GET", "HEAD", "OPTIONS"))
+        # Repetition supports bounded behavioural checks such as rate-limit
+        # transitions without allowing an untrusted catalogue to create an
+        # unbounded request loop.
         self.repeat = max(1, min(int(repeat), 10))
+        # Profiles may contain research and expected-response metadata. The
+        # Burp adapter currently acts only on request_headers and accept.
         self.profile = profile or {}
 
 
@@ -35,6 +42,8 @@ class ProbeCatalogue(object):
     @classmethod
     def from_json(cls, text):
         document = json.loads(text)
+        # Probes are data rather than executable configuration. Validate the
+        # schema and bound payload size before any entry reaches the adapter.
         if document.get("schema_version") != cls.SCHEMA_VERSION:
             raise ValueError("unsupported probe catalogue schema")
         probes = []
@@ -52,6 +61,8 @@ class ProbeCatalogue(object):
 
     @classmethod
     def bundled(cls):
+        # Resolve relative to the installed package rather than Burp's process
+        # directory, which is not stable across launch methods.
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "probes.json")
         with open(path, "r") as source:
             return cls.from_json(source.read())
@@ -68,6 +79,8 @@ class ProbePlanner(object):
         """Return raw values; Burp insertion points perform URL/body encoding."""
         method = str(method).upper()
         name = str(insertion_point_name).lower()
+        # Authentication, header and cookie insertion points are skipped here
+        # because buildRequest could overwrite credentials or session state.
         if any(term in name for term in ("cookie", "authorization", "header")):
             return []
         provider_filter = set(providers or [])
@@ -83,6 +96,8 @@ class ProbePlanner(object):
         """Return catalogue entries so adapters can apply profile metadata."""
         method = str(method).upper()
         name = str(insertion_point_name).lower()
+        # Apply the same trust-boundary check as plan(); callers requesting
+        # complete entries must not gain a less restrictive route.
         if any(term in name for term in ("cookie", "authorization", "header")):
             return []
         provider_filter = set(providers or [])

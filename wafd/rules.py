@@ -20,6 +20,8 @@ class RuleCatalogue(object):
     @classmethod
     def from_json(cls, text):
         document = json.loads(text)
+        # Keep the catalogue declarative. Only recognised model fields are
+        # constructed; JSON content is never imported or evaluated as code.
         if not isinstance(document, dict) or not isinstance(document.get("rules"), list):
             raise ValueError("rule document must contain a rules list")
         return cls(cls._rule_from_dict(item) for item in document["rules"])
@@ -45,6 +47,8 @@ class RuleCatalogue(object):
                     bool(item.get("enabled", True)))
 
     def _validate_unique_ids(self):
+        # Evidence is deduplicated by rule identifier, so duplicate IDs would
+        # make both confidence scoring and issue details order-dependent.
         ids = [rule.rule_id for rule in self.rules]
         if len(ids) != len(set(ids)):
             raise ValueError("rule ids must be unique")
