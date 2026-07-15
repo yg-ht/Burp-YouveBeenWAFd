@@ -28,6 +28,17 @@ class ProbePlannerTests(unittest.TestCase):
             ProbeCatalogue.from_json('{"schema_version":1,"probes":['
                 '{"id":"x","value":"1"},{"id":"x","value":"2"}]}')
 
+    def test_repetition_is_bounded_and_catalogue_driven(self):
+        catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+            '{"id":"sequence","value":"x","repeat":5}]}')
+        self.assertEqual(ProbePlanner(4, catalogue=catalogue).plan("GET", "query"),
+                         ["x", "x", "x", "x"])
+
+    def test_probe_method_allowlist_is_enforced(self):
+        catalogue = ProbeCatalogue.from_json('{"schema_version":1,"probes":['
+            '{"id":"post","value":"x","safe_methods":["POST"]}]}')
+        self.assertEqual(ProbePlanner(3, catalogue=catalogue).plan("GET", "query"), [])
+
 
 if __name__ == "__main__":
     unittest.main()

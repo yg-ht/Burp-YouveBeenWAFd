@@ -60,6 +60,22 @@ class ResponseDetector(object):
                 added = set(headers) - before
                 matched = len(added) >= int(matcher.get("minimum", 1))
                 detail = "probe added response headers: %s" % ", ".join(sorted(added))
+            elif kind == "body_hash_change" and baseline is not None:
+                matched = (baseline.get("body_hash") and response.get("body_hash") and
+                           baseline.get("body_hash") != response.get("body_hash"))
+                detail = "probe changed the response body hash"
+            elif kind == "cookie_delta" and baseline is not None:
+                added = set(response.get("cookies", [])) - set(baseline.get("cookies", []))
+                matched = len(added) >= int(matcher.get("minimum", 1))
+                detail = "probe added response cookies: %s" % ", ".join(sorted(added))
+            elif kind == "http_version_change" and baseline is not None:
+                matched = (baseline.get("http_version") and response.get("http_version") and
+                           baseline.get("http_version") != response.get("http_version"))
+                detail = "probe changed HTTP version from %s to %s" % (
+                    baseline.get("http_version"), response.get("http_version"))
+            elif kind == "connection_state":
+                matched = response.get("connection_state") in matcher.get("values", [])
+                detail = "transport ended with %s" % response.get("connection_state")
             elif kind == "challenge_transition" and baseline is not None:
                 challenge_terms = [str(term).lower() for term in matcher.get("terms", [])]
                 before_body = str(baseline.get("body", "")).lower()

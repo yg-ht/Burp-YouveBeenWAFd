@@ -60,6 +60,17 @@ class DetectorTests(unittest.TestCase):
         response = {"status": 403, "headers": {"x-azure-ref": "ref"}, "body": "The request is blocked."}
         self.assertEqual(detector.detect("https://x", response)[0].action, "block")
 
+    def test_cookie_delta_and_body_hash_change_are_behavioural(self):
+        catalogue = RuleCatalogue.from_json('{"rules": ['
+            '{"id":"cookie","name":"Cookie","evidence_group":"cookie","weight":10,'
+            '"matcher":{"kind":"cookie_delta"}},'
+            '{"id":"hash","name":"Hash","evidence_group":"hash","weight":10,'
+            '"matcher":{"kind":"body_hash_change"}}]}')
+        baseline = {"status": 200, "headers": {}, "cookies": [], "body_hash": "a", "body": "normal"}
+        response = {"status": 200, "headers": {}, "cookies": ["challenge"], "body_hash": "b", "body": "challenge"}
+        ids = [item.rule_id for item in ResponseDetector(catalogue).detect("https://x", response, baseline=baseline)]
+        self.assertEqual(ids, ["cookie", "hash"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,10 +2,12 @@
 
 import json
 import os
+import re
 
 from .assessment import AssessmentStore
 from .config import Configuration
 from .detector import ResponseDetector
+from .fingerprint import build_fingerprint
 from .probes import ProbePlanner
 from .rules import RuleCatalogue
 
@@ -136,8 +138,10 @@ class WafExtension(object):
         body = raw_response[response_info.getBodyOffset():]
         if not isinstance(body, str):
             body = body.decode("utf-8", "replace")
-        return {"status": response_info.getStatusCode(),
-                "headers": headers, "body": body[:1024 * 1024]}
+        first_line = raw_response.splitlines()[0] if raw_response.splitlines() else ""
+        match = re.match(r"HTTP/(\\d(?:\\.\\d)?)", str(first_line))
+        return build_fingerprint(response_info.getStatusCode(), headers, body[:1024 * 1024],
+                                 match.group(1) if match else "")
 
     @staticmethod
     def _origin(url):

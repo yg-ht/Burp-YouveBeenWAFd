@@ -7,13 +7,17 @@ import os
 class Probe(object):
     """A raw insertion-point value and its expected WAF behaviours."""
 
-    def __init__(self, value, providers, actions, probe_id, name, enabled=True):
+    def __init__(self, value, providers, actions, probe_id, name, enabled=True,
+                 control_required=True, safe_methods=None, repeat=1):
         self.value = value
         self.providers = tuple(providers)
         self.actions = tuple(actions)
         self.probe_id = probe_id
         self.name = name
         self.enabled = bool(enabled)
+        self.control_required = bool(control_required)
+        self.safe_methods = tuple(safe_methods or ("GET", "HEAD", "OPTIONS"))
+        self.repeat = max(1, min(int(repeat), 10))
 
 
 class ProbeCatalogue(object):
@@ -40,7 +44,9 @@ class ProbeCatalogue(object):
             if not isinstance(value, str) or len(value) > 4096:
                 raise ValueError("probe value must be a bounded string")
             probes.append(Probe(value, item.get("providers", []), item.get("actions", []),
-                                item["id"], item.get("name", item["id"]), item.get("enabled", True)))
+                                item["id"], item.get("name", item["id"]), item.get("enabled", True),
+                                item.get("control_required", True), item.get("safe_methods"),
+                                item.get("repeat", 1)))
         return cls(probes)
 
     @classmethod
@@ -71,9 +77,12 @@ class ProbePlanner(object):
         for probe in self.catalogue.probes:
             if not probe.enabled:
                 continue
+            if method not in probe.safe_methods and not self.allow_non_idempotent:
+                continue
             if provider_filter and not provider_filter.intersection(probe.providers):
                 continue
-            selected.append(probe.value)
-            if len(selected) >= self.max_probes:
-                break
+            for _ in range(probe.repeat):
+                selected.append(probe.value)
+                if len(selected) >= self.max_probes:
+                    return selected
         return selected

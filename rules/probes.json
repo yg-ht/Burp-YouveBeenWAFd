@@ -23,6 +23,15 @@
       "actions": ["block", "challenge"]
     },
     {
+      "id": "generic.rate-limit-sequence",
+      "name": "Bounded repeated marker for rate-limit behaviour",
+      "value": "wafd-rate-limit-marker",
+      "providers": ["cloudflare", "aws-waf", "azure-waf", "google-cloud-armor", "akamai", "imperva", "fortiweb"],
+      "actions": ["rate_limit"],
+      "repeat": 5,
+      "safe_methods": ["GET", "HEAD", "OPTIONS"]
+    },
+    {
       "id": "generic.angle-encoding",
       "name": "Encoded angle-bracket parser probe",
       "value": "<wafd-probe>",
