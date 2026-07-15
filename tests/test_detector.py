@@ -71,6 +71,19 @@ class DetectorTests(unittest.TestCase):
         ids = [item.rule_id for item in ResponseDetector(catalogue).detect("https://x", response, baseline=baseline)]
         self.assertEqual(ids, ["cookie", "hash"])
 
+    def test_crs_identifier_and_concealed_status_are_recognised(self):
+        catalogue = RuleCatalogue.from_json('{"rules": ['
+            '{"id":"crs","name":"CRS","evidence_group":"crs","weight":100,'
+            '"tags":["modsecurity","product","block"],"matcher":{"kind":"body_regex","pattern":"949110"}},'
+            '{"id":"conceal","name":"Conceal","evidence_group":"conceal","weight":18,'
+            '"matcher":{"kind":"status_transition","blocked":[404,502]}}]}')
+        detector = ResponseDetector(catalogue)
+        crs = detector.detect("https://x", {"status": 403, "headers": {}, "body": "id 949110"})
+        conceal = detector.detect("https://x", {"status": 404, "headers": {}, "body": "not found"},
+                                  baseline={"status": 200, "headers": {}, "body": "ok"})
+        self.assertEqual(crs[0].product, "modsecurity")
+        self.assertEqual(conceal[0].rule_id, "conceal")
+
 
 if __name__ == "__main__":
     unittest.main()
