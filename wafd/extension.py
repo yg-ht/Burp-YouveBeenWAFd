@@ -765,7 +765,7 @@ class WafExtension(object):
             # if an internal caller creates an assessment without a message.
             return
         score = self.assessments.engine.score(assessment.evidence)[0]
-        confidence = "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
+        confidence = self._issue_confidence(score)
         suspected = score >= self.assessments.engine.threshold
         # Under the organisation's testing policy, a suspected WAF is a
         # high-severity engagement blocker rather than an informational note.
@@ -781,6 +781,23 @@ class WafExtension(object):
             self._issue_url(origin, representative),
             representative.getHttpService(), self.assessments.detail(origin),
             remediation, severity, confidence, [representative])
+        self.callbacks.addScanIssue(issue)
+
+    @staticmethod
+    def _issue_confidence(score):
+        """Map a numeric assessment score to Burp's legacy confidence labels."""
+        return "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
+
+    def _publish_determination(self, origin, determination, representative):
+        """Publish one immutable informational audit issue for an active batch."""
+        issue = WafScanIssue(
+            self._issue_url(origin, representative),
+            representative.getHttpService(),
+            self.assessments.determination_detail(origin, determination),
+            "Historical record only; use the current-assessment issue for the "
+            "authoritative testing decision.",
+            "Information", self._issue_confidence(determination.score),
+            [representative], name="WAF Detector: active determination")
         self.callbacks.addScanIssue(issue)
 
     def _issue_url(self, origin, representative):
@@ -803,6 +820,10 @@ class WafExtension(object):
             request_info = self.helpers.analyzeRequest(baseRequestResponse)
             name = insertionPoint.getInsertionPointName()
             probe_entries = self.probes.plan_entries(request_info.getMethod(), name)
+            batch_started_at = self.assessments._timestamp()
+            batch_evidence = []
+            tested_characteristics = set()
+            representative = baseRequestResponse
             method = str(request_info.getMethod()).upper()
             root_mode = (method not in ("GET", "HEAD", "OPTIONS") and
                          self.configuration.non_get_target == "root")
@@ -823,9 +844,7 @@ class WafExtension(object):
                     # Falling back preserves scan availability, but means the
                     # selected response is the control for this comparison.
                     control = baseRequestResponse
-            results = []
             specialised_controls = {}
-            observed = False
             origin = self._origin(request_info.getUrl())
             for probe in probe_entries:
                 # Unloading is cooperative because Burp's legacy HTTP API does
@@ -898,8 +917,11 @@ class WafExtension(object):
                     evidence = self.detector.detect(
                         origin, reset, "active", characteristic=probe.probe_id,
                         classification=probe.profile.get("classification", ""))
-                    self.assessments.observe(origin, evidence, baseRequestResponse)
-                    observed = True
+                    observed_at = self.assessments._timestamp()
+                    for item in evidence:
+                        item.observed_at = observed_at
+                    batch_evidence.extend(evidence)
+                    tested_characteristics.add(probe.probe_id)
                     continue
                 response_info = self.helpers.analyzeResponse(response.getResponse())
                 normalised = self._normalise_response(
@@ -916,12 +938,20 @@ class WafExtension(object):
                 evidence = self.detector.detect(
                     origin, normalised, "active", baseline, probe.probe_id,
                     probe.profile.get("classification", ""))
-                self.assessments.observe(origin, evidence, response)
-                observed = True
-                results.append(response)
-            if observed:
-                # Publish once after the batch so a large matrix does not ask
-                # Burp to replace the same issue hundreds of times.
+                observed_at = self.assessments._timestamp()
+                for item in evidence:
+                    item.observed_at = observed_at
+                batch_evidence.extend(evidence)
+                tested_characteristics.add(probe.probe_id)
+                representative = response
+            if tested_characteristics:
+                # Commit only after the batch completes. Repeated entries for
+                # one concrete probe are reconciled as one logical re-check.
+                unused_assessment, determination = self.assessments.reconcile_active(
+                    origin, tested_characteristics, batch_evidence,
+                    representative, batch_started_at,
+                    self.assessments._timestamp())
+                self._publish_determination(origin, determination, representative)
                 self._publish_issue(origin)
             return []
         except Exception as error:
@@ -995,8 +1025,13 @@ class WafExtension(object):
         return self.helpers.buildHttpMessage(updated, body)
 
     def consolidateDuplicateIssues(self, existingIssue, newIssue):
-        # A new assessment contains the current evidence and supersedes the old.
-        return 1
+        # Only the authoritative current assessment is replaceable. Historical
+        # active determinations intentionally remain as separate audit records.
+        current_name = "WAF Detector: current assessment"
+        if (existingIssue.getIssueName() == current_name and
+                newIssue.getIssueName() == current_name):
+            return 1
+        return 0
 
     # IContextMenuFactory ----------------------------------------------
     def createMenuItems(self, invocation):

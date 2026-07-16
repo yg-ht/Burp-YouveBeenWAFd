@@ -97,7 +97,7 @@ class AssessmentStore(object):
         for item in evidence:
             if item.characteristic in tested_set:
                 matched_by_key[self._quality_key(item)] = self._copy_evidence(
-                    item, completed)
+                    item, item.observed_at or completed)
 
         old_tested_keys = set(
             self._quality_key(item) for item in assessment.evidence
@@ -124,9 +124,9 @@ class AssessmentStore(object):
             key = self._quality_key(item)
             state = assessment.quality_states.get(key)
             first_detected = (state.first_detected_at if state is not None
-                              else completed)
+                              else item.observed_at or completed)
             assessment.quality_states[key] = QualityState(
-                item, first_detected, completed)
+                item, first_detected, item.observed_at or completed)
 
         assessment.latest_cleared_quality_keys = list(cleared_keys)
         if representative_message is not None:
@@ -134,11 +134,54 @@ class AssessmentStore(object):
 
         score = self.engine.score(assessment.evidence)[0]
         determination = Determination(
-            started, completed, tested, matched_items, cleared_keys,
-            score, self.engine.threshold)
+            started, completed, tested,
+            [self._copy_evidence(item) for item in assessment.evidence],
+            cleared_keys, score, self.engine.threshold,
+            [self._copy_evidence(item) for item in matched_items])
         assessment.determinations.append(determination)
         assessment.determinations = assessment.determinations[-self.max_history:]
         return assessment, determination
+
+    @staticmethod
+    def _quality_label(key):
+        """Return a compact rule/probe label for issue audit records."""
+        return "%s [%s]" % key if key[1] else str(key[0])
+
+    def determination_detail(self, origin, determination):
+        """Render one immutable active determination as escaped HTML."""
+        state = "WAF suspected" if determination.suspected else "No WAF indicators detected"
+        lines = [
+            "<p><b>Historical active determination</b></p>",
+            "<p>Origin: %s<br>Started: %s<br>Completed: %s</p>" % (
+                html_escape(str(origin), quote=True),
+                html_escape(str(determination.started_at), quote=True),
+                html_escape(str(determination.completed_at), quote=True)),
+            "<p>Result: %s<br>Confidence: %.0f%% (threshold %.0f%%)</p>" % (
+                html_escape(state), determination.score * 100,
+                determination.threshold * 100),
+        ]
+        tested = determination.tested_characteristics
+        lines.append("<p>Tested probes: %s</p>" % (
+            ", ".join(html_escape(str(value), quote=True) for value in tested)
+            if tested else "None"))
+        matched = ["%s at %s" % (
+            self._quality_label(self._quality_key(item)), item.observed_at)
+            for item in determination.matched_evidence]
+        lines.append("<p>Qualities matched in this batch: %s</p>" % (
+            ", ".join(html_escape(value, quote=True) for value in matched)
+            if matched else "None"))
+        cleared = [self._quality_label(key)
+                   for key in determination.cleared_quality_keys]
+        lines.append("<p>Qualities cleared by this batch: %s</p>" % (
+            ", ".join(html_escape(value, quote=True) for value in cleared)
+            if cleared else "None"))
+        current = ["%s (last confirmed %s)" % (
+            self._quality_label(self._quality_key(item)), item.observed_at)
+            for item in determination.evidence]
+        lines.append("<p>Current qualities producing this result: %s</p>" % (
+            ", ".join(html_escape(value, quote=True) for value in current)
+            if current else "None"))
+        return "".join(lines)
 
     def detail(self, origin):
         assessment = self.assessments.get(origin, OriginAssessment(origin))

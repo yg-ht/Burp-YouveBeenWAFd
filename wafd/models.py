@@ -72,7 +72,8 @@ class Determination(object):
     """Immutable summary of one committed active-probe batch."""
 
     def __init__(self, started_at, completed_at, tested_characteristics,
-                 evidence, cleared_quality_keys, score, threshold):
+                 evidence, cleared_quality_keys, score, threshold,
+                 matched_evidence=None):
         self.started_at = started_at
         self.completed_at = completed_at
         self.tested_characteristics = tuple(tested_characteristics)
@@ -81,6 +82,7 @@ class Determination(object):
         self.score = float(score)
         self.threshold = float(threshold)
         self.suspected = self.score >= self.threshold
+        self.matched_evidence = tuple(matched_evidence or ())
 
 
 class OriginAssessment(object):
