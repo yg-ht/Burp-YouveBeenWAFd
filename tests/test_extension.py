@@ -1,4 +1,7 @@
+import sys
+import types
 import unittest
+from unittest import mock
 
 from wafd.assessment import AssessmentStore
 from wafd.config import Configuration
@@ -149,6 +152,68 @@ class ExtensionRequestLineTests(unittest.TestCase):
 
 
 class ExtensionActiveAdapterTests(unittest.TestCase):
+    def test_context_menu_action_schedules_instead_of_probing_inline(self):
+        class _MenuItem(object):
+            def __init__(self, label):
+                self.label = label
+                self.listener = None
+
+            def addActionListener(self, listener):
+                self.listener = listener
+
+        class _Invocation(object):
+            def getSelectedMessages(self):
+                return [selected_message]
+
+        # Supply the Java Swing import expected by createMenuItems() without
+        # requiring Burp's Jython runtime in the unit-test process.
+        swing_module = types.ModuleType("javax.swing")
+        swing_module.JMenuItem = _MenuItem
+        javax_module = types.ModuleType("javax")
+        javax_module.swing = swing_module
+
+        extension = WafExtension()
+        selected_message = object()
+        extension._start_selected_probe = mock.Mock()
+        extension._probe_selected = mock.Mock()
+        with mock.patch.dict(
+                sys.modules,
+                {"javax": javax_module, "javax.swing": swing_module}):
+            menu_items = extension.createMenuItems(_Invocation())
+            menu_items[0].listener(None)
+
+        extension._start_selected_probe.assert_called_once_with(selected_message)
+        extension._probe_selected.assert_not_called()
+
+    def test_context_probe_is_scheduled_on_a_daemon_worker(self):
+        extension = WafExtension()
+        extension.callbacks = _Callbacks()
+        selected_message = object()
+
+        with mock.patch("wafd.extension.Thread") as thread_class:
+            extension._start_selected_probe(selected_message)
+
+        thread_class.assert_called_once_with(
+            target=extension._probe_selected,
+            args=(selected_message,),
+            name="WAF Detector active probe")
+        worker = thread_class.return_value
+        worker.setDaemon.assert_called_once_with(True)
+        worker.start.assert_called_once_with()
+
+    def test_context_probe_does_not_fall_back_inline_when_worker_start_fails(self):
+        extension = WafExtension()
+        extension.callbacks = _Callbacks()
+        extension._probe_selected = mock.Mock()
+
+        with mock.patch("wafd.extension.Thread") as thread_class:
+            thread_class.return_value.start.side_effect = RuntimeError("no thread")
+            extension._start_selected_probe(object())
+
+        extension._probe_selected.assert_not_called()
+        self.assertEqual(len(extension.callbacks.errors), 1)
+        self.assertIn("could not start context probe", extension.callbacks.errors[0])
+
     def test_response_normalisation_extracts_version_from_raw_bytes(self):
         extension = WafExtension()
         raw = b"HTTP/1.1 403 Forbidden\r\n\r\nblocked"
