@@ -185,6 +185,12 @@ An active matrix publishes once after the batch rather than replacing the same
 issue after every request. Burp confidence labels remain: Certain at 85% or
 above, Firm at 60–84%, and Tentative below 60%.
 
+Severity enforces the testing policy independently of Burp's confidence label.
+An assessment at or above the configured WAF threshold is published as
+**High**, with remediation directing the operator to stop active testing and
+confirm that the target is approved under the no-WAF policy. A below-threshold
+no-indicators assessment remains **Information**.
+
 ## Provider and action separation
 
 Provider and action tags remain independent. Examples:

@@ -158,6 +158,31 @@ class ExtensionRequestLineTests(unittest.TestCase):
 
 
 class ExtensionActiveAdapterTests(unittest.TestCase):
+    def test_published_issue_severity_tracks_inclusive_waf_threshold(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"below","name":"Below","evidence_group":"below","weight":59},'
+            '{"id":"boundary","name":"Boundary","evidence_group":"boundary",'
+            '"weight":60}]}')
+
+        for rule_id, expected_severity in (("below", "Information"),
+                                           ("boundary", "High")):
+            extension = WafExtension()
+            extension.helpers = _Helpers()
+            extension.callbacks = _Callbacks()
+            extension.assessments = AssessmentStore(rules.rules, threshold=0.60)
+            origin = "https://example.test:443"
+            representative = _Message(
+                b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n")
+            extension.assessments.observe(
+                origin, [Evidence(rule_id, origin, "matched")], representative)
+
+            extension._publish_issue(origin)
+
+            issue = extension.callbacks.issues[0]
+            self.assertEqual(issue.getSeverity(), expected_severity)
+            if expected_severity == "High":
+                self.assertIn("Stop active testing", issue.getRemediationDetail())
+
     def test_active_probe_accepts_selected_message_without_baseline_response(self):
         rules = RuleCatalogue.from_json('{"rules":['
             '{"id":"status","name":"Status signature","evidence_group":"status",'
