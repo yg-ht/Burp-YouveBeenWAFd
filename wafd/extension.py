@@ -766,13 +766,21 @@ class WafExtension(object):
             return
         score = self.assessments.engine.score(assessment.evidence)[0]
         confidence = "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
+        suspected = score >= self.assessments.engine.threshold
+        # Under the organisation's testing policy, a suspected WAF is a
+        # high-severity engagement blocker rather than an informational note.
+        severity = "High" if suspected else "Information"
+        remediation = (
+            "Stop active testing and confirm that the target is approved under "
+            "the organisation's no-WAF testing policy before continuing."
+            if suspected else
+            "Continue monitoring traffic and validate the suspected product manually.")
         # Burp replaces earlier issues with the same identity via
         # consolidateDuplicateIssues(), leaving one current assessment.
         issue = WafScanIssue(
             self._issue_url(origin, representative),
             representative.getHttpService(), self.assessments.detail(origin),
-            "Continue monitoring traffic and validate the suspected product manually.",
-            "Information", confidence, [representative])
+            remediation, severity, confidence, [representative])
         self.callbacks.addScanIssue(issue)
 
     def _issue_url(self, origin, representative):
