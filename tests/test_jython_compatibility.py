@@ -87,6 +87,16 @@ class PlainModelCompatibilityTests(unittest.TestCase):
 
         self.assertEqual([], second.evidence)
 
+    def test_assessment_history_defaults_are_not_shared(self):
+        first = OriginAssessment("https://first.example")
+        second = OriginAssessment("https://second.example")
+
+        first.quality_states[("rule", "probe")] = "state"
+        first.determinations.append("determination")
+
+        self.assertEqual({}, second.quality_states)
+        self.assertEqual([], second.determinations)
+
 
 if __name__ == "__main__":
     unittest.main()

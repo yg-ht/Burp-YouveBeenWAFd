@@ -43,7 +43,7 @@ class Evidence(object):
     """
 
     def __init__(self, rule_id, origin, detail, product="", source="passive", action="",
-                 characteristic="", classification=""):
+                 characteristic="", classification="", observed_at=""):
         # Keep constructor ordering compatible with every existing detector
         # call while retaining named-argument support for specialist evidence.
         self.rule_id = rule_id
@@ -54,15 +54,46 @@ class Evidence(object):
         self.action = action
         self.characteristic = characteristic
         self.classification = classification
+        self.observed_at = observed_at
+
+
+class QualityState(object):
+    """Lifecycle timestamps and latest evidence for one detected quality."""
+
+    def __init__(self, evidence, first_detected_at, last_confirmed_at,
+                 cleared_at=""):
+        self.evidence = evidence
+        self.first_detected_at = first_detected_at
+        self.last_confirmed_at = last_confirmed_at
+        self.cleared_at = cleared_at
+
+
+class Determination(object):
+    """Immutable summary of one committed active-probe batch."""
+
+    def __init__(self, started_at, completed_at, tested_characteristics,
+                 evidence, cleared_quality_keys, score, threshold):
+        self.started_at = started_at
+        self.completed_at = completed_at
+        self.tested_characteristics = tuple(tested_characteristics)
+        self.evidence = tuple(evidence)
+        self.cleared_quality_keys = tuple(cleared_quality_keys)
+        self.score = float(score)
+        self.threshold = float(threshold)
+        self.suspected = self.score >= self.threshold
 
 
 class OriginAssessment(object):
     """Current bounded assessment for one origin."""
 
-    def __init__(self, origin, evidence=None, representative_message=None):
+    def __init__(self, origin, evidence=None, representative_message=None,
+                 quality_states=None, determinations=None):
         self.origin = origin
 
         # Copy caller-provided evidence so the assessment owns its mutable
         # collection and cannot accidentally modify a list held elsewhere.
         self.evidence = list(evidence) if evidence is not None else []
         self.representative_message = representative_message
+        self.quality_states = dict(quality_states or {})
+        self.determinations = list(determinations or [])
+        self.latest_cleared_quality_keys = []
