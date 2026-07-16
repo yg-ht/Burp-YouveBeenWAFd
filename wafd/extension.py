@@ -683,8 +683,12 @@ class WafExtension(object):
                 for issue in issues:
                     if issue.getIssueName() != "WAF Detector: current assessment":
                         continue
+                    enabled_probes = set(
+                        probe.probe_id
+                        for probe in self.probes.catalogue.probes
+                        if probe.enabled)
                     restored = self.assessments.restore(
-                        origin, issue.getIssueDetail())
+                        origin, issue.getIssueDetail(), enabled_probes)
                     if restored is not None:
                         return
             except Exception as error:
@@ -852,6 +856,7 @@ class WafExtension(object):
             batch_outcomes = []
             skipped_characteristics = set()
             tested_characteristics = set()
+            evaluated_rules_by_characteristic = {}
             representative = baseRequestResponse
             method = str(request_info.getMethod()).upper()
             root_mode = (method not in ("GET", "HEAD", "OPTIONS") and
@@ -972,6 +977,9 @@ class WafExtension(object):
                         item.observed_at = observed_at
                     batch_evidence.extend(evidence)
                     tested_characteristics.add(probe.probe_id)
+                    evaluated_rules_by_characteristic.setdefault(
+                        probe.probe_id, set()).update(
+                            self.detector.evaluable_rule_ids(False, False))
                     continue
                 response_info = self.helpers.analyzeResponse(response.getResponse())
                 normalised = self._normalise_response(
@@ -996,6 +1004,10 @@ class WafExtension(object):
                     item.observed_at = observed_at
                 batch_evidence.extend(evidence)
                 tested_characteristics.add(probe.probe_id)
+                evaluated_rules_by_characteristic.setdefault(
+                    probe.probe_id, set()).update(
+                        self.detector.evaluable_rule_ids(
+                            True, baseline is not None))
                 representative = response
             if tested_characteristics:
                 # Commit only after the batch completes. Repeated entries for
@@ -1004,7 +1016,8 @@ class WafExtension(object):
                     origin, tested_characteristics, batch_evidence,
                     representative, batch_started_at,
                     self.assessments._timestamp(), batch_outcomes,
-                    skipped_characteristics)
+                    skipped_characteristics,
+                    evaluated_rules_by_characteristic)
                 self._publish_determination(origin, determination, representative)
                 self._publish_issue(origin)
             return []

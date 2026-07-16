@@ -91,6 +91,10 @@ class AssessmentStore(object):
                  observed_at=None):
         assessment = self.assessments.setdefault(origin, OriginAssessment(origin))
         timestamp = self._timestamp(observed_at)
+        # A successful clean response is still a completed assessment check.
+        # Store this independently because an empty evidence list has no
+        # quality timestamp from which the UI could derive the latest check.
+        assessment.last_checked_at = timestamp
         # A rule contributes only once per origin. This prevents frequently
         # observed passive headers from overwhelming distinct behavioural
         # evidence and keeps the stored assessment bounded.
@@ -121,18 +125,21 @@ class AssessmentStore(object):
     def reconcile_active(self, origin, tested_characteristics, evidence,
                          representative_message=None, started_at=None,
                          completed_at=None, outcomes=None,
-                         skipped_characteristics=None):
+                         skipped_characteristics=None,
+                         evaluated_rules_by_characteristic=None):
         """Commit one active batch and replace only qualities it rechecked."""
         with self._lock:
             return self._reconcile_active(
                 origin, tested_characteristics, evidence,
                 representative_message, started_at, completed_at,
-                outcomes, skipped_characteristics)
+                outcomes, skipped_characteristics,
+                evaluated_rules_by_characteristic)
 
     def _reconcile_active(self, origin, tested_characteristics, evidence,
                           representative_message=None, started_at=None,
                           completed_at=None, outcomes=None,
-                          skipped_characteristics=None):
+                          skipped_characteristics=None,
+                          evaluated_rules_by_characteristic=None):
         assessment = self.assessments.setdefault(origin, OriginAssessment(origin))
         started = self._timestamp(started_at)
         completed = self._timestamp(completed_at)
@@ -152,8 +159,18 @@ class AssessmentStore(object):
         old_tested_keys = set(
             self._quality_key(item) for item in assessment.evidence
             if item.characteristic in tested_set)
+        if evaluated_rules_by_characteristic is None:
+            # Preserve the original all-rules behaviour for existing internal
+            # callers that do not provide rule-level evaluation information.
+            clearable_keys = set(old_tested_keys)
+        else:
+            clearable_keys = set(
+                key for key in old_tested_keys
+                if key[0] in set(evaluated_rules_by_characteristic.get(
+                    key[1], ())))
+        replacement_keys = clearable_keys.union(matched_by_key)
         preserved = [item for item in assessment.evidence
-                     if item.characteristic not in tested_set]
+                     if self._quality_key(item) not in replacement_keys]
         capacity = max(0, self.max_evidence - len(preserved))
         # Reconfirmed current qualities retain their existing bounded slots;
         # only the remaining capacity is used for newly discovered qualities.
@@ -162,7 +179,7 @@ class AssessmentStore(object):
             key=lambda key: (0 if key in old_tested_keys else 1, key))
         retained_keys = ordered_keys[:capacity]
         retained_key_set = set(retained_keys)
-        cleared_keys = sorted(old_tested_keys - retained_key_set)
+        cleared_keys = sorted(clearable_keys - retained_key_set)
         matched_items = [matched_by_key[key] for key in retained_keys]
         assessment.evidence = preserved + matched_items
 
@@ -179,6 +196,7 @@ class AssessmentStore(object):
                 item, first_detected, item.observed_at or completed)
 
         assessment.latest_cleared_quality_keys = list(cleared_keys)
+        assessment.last_checked_at = completed
         if representative_message is not None:
             assessment.representative_message = representative_message
 
@@ -249,6 +267,8 @@ class AssessmentStore(object):
         return {
             "version": self.STATE_VERSION,
             "origin": _text(origin),
+            "last_checked_at": _text(assessment.last_checked_at)[
+                :self.STATE_MAX_TIMESTAMP],
             "qualities": qualities,
             "latest_cleared": [self._key_document(key)
                                for key in assessment.latest_cleared_quality_keys],
@@ -327,12 +347,12 @@ class AssessmentStore(object):
             cls._validated_text(value[1], "characteristic", cls.STATE_MAX_IDENTIFIER),
         )
 
-    def restore(self, origin, detail):
+    def restore(self, origin, detail, enabled_probes=None):
         """Restore validated current state from an existing Burp issue detail."""
         with self._lock:
-            return self._restore(origin, detail)
+            return self._restore(origin, detail, enabled_probes)
 
-    def _restore(self, origin, detail):
+    def _restore(self, origin, detail, enabled_probes=None):
         document = self._state_payload(detail)
         if document is None:
             return None
@@ -349,6 +369,8 @@ class AssessmentStore(object):
             raise ValueError("assessment qualities are invalid")
         quality_states = {}
         current_evidence = []
+        enabled_probes = (None if enabled_probes is None
+                          else set(enabled_probes))
         for quality in quality_documents:
             if not isinstance(quality, dict):
                 raise ValueError("assessment quality is invalid")
@@ -357,7 +379,10 @@ class AssessmentStore(object):
                 raise ValueError("assessment quality is duplicated")
             # Rules removed from the current catalogue cannot contribute to a
             # restored score, so ignore their historical lifecycle record.
-            if key[0] not in self.engine.rules:
+            rule = self.engine.rules.get(key[0])
+            if (rule is None or not rule.enabled or
+                    (enabled_probes is not None and key[1] and
+                     key[1] not in enabled_probes)):
                 continue
             evidence = Evidence(
                 key[0], stored_origin, "",
@@ -442,8 +467,20 @@ class AssessmentStore(object):
         assessment = OriginAssessment(
             stored_origin, current_evidence, quality_states=quality_states,
             determinations=determinations)
-        assessment.latest_cleared_quality_keys = [
+        validated_latest_cleared = [
             self._validated_key(key) for key in latest_cleared_values]
+        assessment.latest_cleared_quality_keys = [
+            key for key in validated_latest_cleared if key in quality_states]
+        stored_last_checked = document.get("last_checked_at")
+        if stored_last_checked is not None:
+            assessment.last_checked_at = self._validated_text(
+                stored_last_checked, "last checked time",
+                self.STATE_MAX_TIMESTAMP)
+        elif determinations:
+            assessment.last_checked_at = determinations[-1].completed_at
+        elif quality_states:
+            assessment.last_checked_at = max(
+                state.last_confirmed_at for state in quality_states.values())
         self.assessments[stored_origin] = assessment
         return assessment
 
@@ -588,8 +625,9 @@ class AssessmentStore(object):
         # Every value that can originate in HTTP traffic is escaped before it
         # reaches Burp's HTML issue renderer.
         safe_origin = html_escape(str(origin), quote=True)
-        last_checked = (assessment.determinations[-1].completed_at
-                        if assessment.determinations else "")
+        last_checked = assessment.last_checked_at
+        if not last_checked and assessment.determinations:
+            last_checked = assessment.determinations[-1].completed_at
         if not last_checked and assessment.quality_states:
             last_checked = max(
                 state.last_confirmed_at

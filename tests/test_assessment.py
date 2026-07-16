@@ -49,6 +49,30 @@ class AssessmentTests(unittest.TestCase):
             assessment.quality_states[("active", "probe.one")].cleared_at,
             "2026-01-02T00:01:00Z")
 
+    def test_inconclusive_probe_clears_only_rules_it_evaluated(self):
+        rules = [Rule("status", "Status", "status", 60),
+                 Rule("transport", "Transport", "transport", 10)]
+        store = AssessmentStore(rules, clock=lambda: "unused")
+        store.observe("https://x", [
+            Evidence("status", "https://x", "HTTP 403", source="active",
+                     characteristic="probe"),
+        ], observed_at="2026-01-01T00:00:00Z")
+
+        assessment, determination = store.reconcile_active(
+            "https://x", ["probe"], [
+                Evidence("transport", "https://x", "reset", source="active",
+                         characteristic="probe",
+                         observed_at="2026-01-02T00:00:30Z"),
+            ], started_at="2026-01-02T00:00:00Z",
+            completed_at="2026-01-02T00:01:00Z",
+            evaluated_rules_by_characteristic={"probe": {"transport"}})
+
+        self.assertEqual(
+            [(item.rule_id, item.characteristic) for item in assessment.evidence],
+            [("status", "probe"), ("transport", "probe")])
+        self.assertEqual(determination.cleared_quality_keys, ())
+        self.assertTrue(determination.suspected)
+
     def test_active_recheck_unions_repeated_matches_and_bounds_history(self):
         rules = [Rule("a", "A", "a", 60), Rule("b", "B", "b", 10)]
         store = AssessmentStore(rules, max_history=2, clock=lambda: "unused")
@@ -130,6 +154,72 @@ class AssessmentTests(unittest.TestCase):
         self.assertEqual(
             assessment.determinations[0].skipped_characteristics,
             ("skipped-probe",))
+
+    def test_restore_excludes_disabled_rules_and_probes_from_current_state(self):
+        original_rules = [Rule("enabled", "Enabled", "one", 60),
+                          Rule("disabled", "Disabled", "two", 60)]
+        original = AssessmentStore(original_rules, clock=lambda: "unused")
+        original.reconcile_active(
+            "https://x", ["enabled-probe", "disabled-probe"], [
+                Evidence("enabled", "https://x", "keep", source="active",
+                         characteristic="enabled-probe"),
+                Evidence("enabled", "https://x", "drop probe", source="active",
+                         characteristic="disabled-probe"),
+                Evidence("disabled", "https://x", "drop rule", source="active",
+                         characteristic="enabled-probe"),
+            ], started_at="2026-01-01T00:00:00Z",
+            completed_at="2026-01-01T00:01:00Z")
+
+        restored_rules = [Rule("enabled", "Enabled", "one", 60),
+                          Rule("disabled", "Disabled", "two", 60,
+                               enabled=False)]
+        restored = AssessmentStore(restored_rules, clock=lambda: "unused")
+        assessment = restored.restore(
+            "https://x", original.detail("https://x"), {"enabled-probe"})
+
+        self.assertEqual(
+            [(item.rule_id, item.characteristic) for item in assessment.evidence],
+            [("enabled", "enabled-probe")])
+        self.assertEqual(
+            sorted(assessment.quality_states),
+            [("enabled", "enabled-probe")])
+        self.assertEqual(len(assessment.determinations), 1)
+
+    def test_clean_passive_checks_advance_and_persist_last_checked_time(self):
+        store = AssessmentStore(
+            [Rule("r", "Rule", "g", 10)], clock=lambda: "unused")
+
+        store.observe("https://x", [], observed_at="2026-01-01T00:00:00Z")
+        store.observe("https://x", [], observed_at="2026-01-02T00:00:00Z")
+
+        detail = store.detail("https://x")
+        self.assertIn("Last checked: 2026-01-02T00:00:00Z", detail)
+        restored = AssessmentStore([Rule("r", "Rule", "g", 10)])
+        assessment = restored.restore("https://x", detail)
+        self.assertEqual(
+            assessment.last_checked_at, "2026-01-02T00:00:00Z")
+        self.assertIn("Last checked: 2026-01-02T00:00:00Z",
+                      restored.detail("https://x"))
+
+    def test_legacy_state_derives_last_checked_from_quality_timestamp(self):
+        original = AssessmentStore(
+            [Rule("r", "Rule", "g", 10)], clock=lambda: "unused")
+        original.observe(
+            "https://x", [Evidence("r", "https://x", "matched")],
+            observed_at="2026-01-01T00:00:00Z")
+        document = original._state_payload(original.detail("https://x"))
+        del document["last_checked_at"]
+        encoded = base64.b64encode(json.dumps(
+            document, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")).decode("ascii")
+        legacy_detail = "%s%s%s" % (
+            original.STATE_PREFIX, encoded, original.STATE_SUFFIX)
+
+        restored = AssessmentStore([Rule("r", "Rule", "g", 10)])
+        assessment = restored.restore("https://x", legacy_detail)
+
+        self.assertEqual(
+            assessment.last_checked_at, "2026-01-01T00:00:00Z")
 
     def test_state_restore_rejects_mismatched_unknown_and_oversized_data(self):
         store = AssessmentStore([Rule("r", "Rule", "g", 10)])

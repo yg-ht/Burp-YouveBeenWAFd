@@ -153,16 +153,18 @@ builder. Length and hash therefore describe that prefix for a larger response.
 Evidence records rule ID, origin, detail, source, optional provider/action,
 concrete probe characteristic, and optional classification. Passive evidence
 is additive and deduplicated by rule ID. Active evidence is reconciled by rule
-ID plus concrete probe ID: a completed re-check replaces qualities for probes
-that actually ran, while skipped, disabled, cancelled, or failed-to-build
-probes cannot erase earlier evidence. Storage is bounded at 5,000 qualities per
-origin.
+ID plus concrete probe ID. A completed re-check clears a quality only when the
+rule's required inputs were available: a transport failure can update reset or
+timeout evidence but cannot disprove earlier status, header, body, or
+differential evidence. Skipped, disabled, cancelled, or failed-to-build probes
+cannot erase earlier evidence. Storage is bounded at 5,000 qualities per origin.
 
 Each quality records UTC first-detected and last-confirmed timestamps. A later
 successful re-check that no longer matches records when the quality was
 cleared. Repeated transmissions for one probe are combined before the batch is
 committed, and cancelled or fatally aborted batches do not create a misleading
-determination.
+determination. The current issue's latest-check timestamp also advances for a
+successfully analysed passive response that produces no qualities.
 
 A zero-weight `generic.probe-outcome` observation records each completed
 control/probe status pair. It makes permitted or unchanged outcomes visible

@@ -104,7 +104,7 @@ class OriginAssessment(object):
     """Current bounded assessment for one origin."""
 
     def __init__(self, origin, evidence=None, representative_message=None,
-                 quality_states=None, determinations=None):
+                 quality_states=None, determinations=None, last_checked_at=""):
         self.origin = origin
 
         # Copy caller-provided evidence so the assessment owns its mutable
@@ -114,3 +114,6 @@ class OriginAssessment(object):
         self.quality_states = dict(quality_states or {})
         self.determinations = list(determinations or [])
         self.latest_cleared_quality_keys = []
+        # This advances for clean checks as well as matches. Quality timestamps
+        # alone cannot represent a passive response that produced no evidence.
+        self.last_checked_at = last_checked_at

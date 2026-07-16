@@ -145,6 +145,10 @@ Before release, manually verify:
 11. HTTP/1.1 and HTTP/2 responses retain a usable version field.
 12. Timeout/reset behaviour is represented as Burp exposes it on the platform.
 13. One current issue remains after a large active matrix.
+14. A failed active transport does not clear response-based qualities that
+    could not be re-evaluated, while connection-state qualities still update.
+15. Passive responses with no matching qualities advance the current issue's
+    latest-check timestamp, including after state restoration.
 
 ## Known limitations
 

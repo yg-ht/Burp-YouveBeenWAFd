@@ -180,7 +180,10 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
                 return previous_detail
 
         extension = WafExtension()
+        extension.catalogue = rules
         extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
         extension.callbacks = _Callbacks()
         extension.callbacks.existing_scan_issues = [_ExistingIssue()]
 
@@ -189,6 +192,42 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
 
         assessment = extension.assessments.assessments[origin]
         self.assertEqual([item.rule_id for item in assessment.evidence], ["r"])
+
+    def test_hydration_excludes_evidence_for_a_disabled_probe(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"r","name":"Rule","evidence_group":"g","weight":60}]}')
+        origin = "https://example.test:443"
+        previous_store = AssessmentStore(rules.rules, clock=lambda: "unused")
+        previous_store.reconcile_active(
+            origin, ["disabled-probe"], [
+                Evidence("r", origin, "matched", source="active",
+                         characteristic="disabled-probe"),
+            ], started_at="2026-01-01T00:00:00Z",
+            completed_at="2026-01-01T00:01:00Z")
+        previous_detail = previous_store.detail(origin)
+
+        class _ExistingIssue(object):
+            def getIssueName(self):
+                return "WAF Detector: current assessment"
+
+            def getIssueDetail(self):
+                return previous_detail
+
+        probes = ProbeCatalogue.from_json('{"schema_version":2,"probes":[{'
+            '"id":"disabled-probe","value":"marker","enabled":false}]}')
+        extension = WafExtension()
+        extension.catalogue = rules
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=probes)
+        extension.callbacks = _Callbacks()
+        extension.callbacks.existing_scan_issues = [_ExistingIssue()]
+
+        extension._hydrate_assessment(origin)
+
+        assessment = extension.assessments.assessments[origin]
+        self.assertEqual(assessment.evidence, [])
+        self.assertEqual(assessment.quality_states, {})
+        self.assertEqual(len(assessment.determinations), 1)
 
     def test_reloaded_active_recheck_can_clear_restored_quality(self):
         rules = RuleCatalogue.from_json('{"rules":['
@@ -312,6 +351,53 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         self.assertEqual(extension.consolidateDuplicateIssues(issues[1], issues[3]), 1)
         self.assertEqual(extension.consolidateDuplicateIssues(issues[0], issues[2]), 0)
         self.assertEqual(extension.consolidateDuplicateIssues(issues[1], issues[2]), 0)
+
+    def test_active_transport_failure_preserves_response_qualities(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"blocked","name":"Blocked","evidence_group":"blocked",'
+            '"weight":60,"matcher":{"kind":"status","values":[403]}},'
+            '{"id":"reset","name":"Reset","evidence_group":"reset",'
+            '"weight":10,"matcher":{"kind":"connection_state",'
+            '"values":["no-response"]}}]}')
+        probes = ProbeCatalogue.from_json('{"schema_version":2,"probes":[{'
+            '"id":"query-probe","value":"marker"}]}')
+
+        class _NoResponseCallbacks(_Callbacks):
+            def makeHttpRequest(self, service, request):
+                self.requests.append(request)
+                return None
+
+        extension = WafExtension()
+        extension.configuration = Configuration()
+        extension.catalogue = rules
+        extension.detector = ResponseDetector(rules)
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=probes)
+        extension.helpers = _Helpers()
+        extension.callbacks = _NoResponseCallbacks()
+        origin = "https://example.test:443"
+        base = _Message(b"GET /selected HTTP/1.1\r\nHost: example.test\r\n\r\n")
+        extension.assessments.observe(origin, [
+            Evidence("blocked", origin, "HTTP 403", source="active",
+                     characteristic="query-probe"),
+        ], base)
+
+        class _InsertionPoint(object):
+            def getInsertionPointName(self):
+                return "query"
+
+            def buildRequest(self, payload):
+                return base.getRequest()
+
+        extension.doActiveScan(base, _InsertionPoint())
+
+        assessment = extension.assessments.assessments[origin]
+        self.assertEqual(
+            [item.rule_id for item in assessment.evidence],
+            ["blocked", "reset"])
+        self.assertEqual(
+            assessment.determinations[-1].cleared_quality_keys, ())
+        self.assertEqual(extension.callbacks.issues[-1].getSeverity(), "High")
 
     def test_published_issue_severity_tracks_inclusive_waf_threshold(self):
         rules = RuleCatalogue.from_json('{"rules":['
