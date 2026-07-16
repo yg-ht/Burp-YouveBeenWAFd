@@ -94,6 +94,8 @@ class _Callbacks(object):
         self.requests = []
         self.errors = []
         self.issues = []
+        self.saved_messages = []
+        self.persisted_message = None
 
     def makeHttpRequest(self, service, request):
         self.requests.append(request)
@@ -101,6 +103,10 @@ class _Callbacks(object):
 
     def addScanIssue(self, issue):
         self.issues.append(issue)
+
+    def saveBuffersToTempFiles(self, message):
+        self.saved_messages.append(message)
+        return self.persisted_message if self.persisted_message is not None else message
 
     def printError(self, message):
         self.errors.append(message)
@@ -189,17 +195,21 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         extension = WafExtension()
         extension.callbacks = _Callbacks()
         selected_message = object()
+        persisted_message = object()
+        extension.callbacks.persisted_message = persisted_message
 
         with mock.patch("wafd.extension.Thread") as thread_class:
             extension._start_selected_probe(selected_message)
 
+        self.assertEqual(extension.callbacks.saved_messages, [selected_message])
         thread_class.assert_called_once_with(
-            target=extension._probe_selected,
-            args=(selected_message,),
+            target=extension._run_selected_probe,
+            args=(persisted_message,),
             name="WAF Detector active probe")
         worker = thread_class.return_value
         worker.setDaemon.assert_called_once_with(True)
         worker.start.assert_called_once_with()
+        self.assertIn(worker, extension._context_probe_workers)
 
     def test_context_probe_does_not_fall_back_inline_when_worker_start_fails(self):
         extension = WafExtension()
@@ -213,6 +223,67 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         extension._probe_selected.assert_not_called()
         self.assertEqual(len(extension.callbacks.errors), 1)
         self.assertIn("could not start context probe", extension.callbacks.errors[0])
+        self.assertEqual(extension._context_probe_workers, set())
+
+    def test_context_worker_releases_tracking_after_completion(self):
+        extension = WafExtension()
+        extension._probe_selected = mock.Mock()
+        persisted_message = object()
+        worker = object()
+        extension._context_probe_workers.add(worker)
+
+        with mock.patch("wafd.extension.current_thread", return_value=worker):
+            extension._run_selected_probe(persisted_message)
+
+        extension._probe_selected.assert_called_once_with(persisted_message)
+        self.assertEqual(extension._context_probe_workers, set())
+
+    def test_queued_context_worker_is_discarded_without_probing_after_unload(self):
+        extension = WafExtension()
+        extension._probe_selected = mock.Mock()
+        persisted_message = object()
+        worker = object()
+        extension._context_probe_workers.add(worker)
+        extension.extensionUnloaded()
+
+        with mock.patch("wafd.extension.current_thread", return_value=worker):
+            extension._run_selected_probe(persisted_message)
+
+        extension._probe_selected.assert_not_called()
+        self.assertEqual(extension._context_probe_workers, set())
+
+    def test_extension_unload_stops_active_batch_after_in_flight_request(self):
+        rules = RuleCatalogue.from_json('{"rules":[]}')
+        probes = ProbeCatalogue.from_json('{"schema_version":2,"probes":[{'
+            '"id":"repeated","value":"marker","repeat":3}]}')
+        extension = WafExtension()
+
+        class _UnloadingCallbacks(_Callbacks):
+            def makeHttpRequest(self, service, request):
+                response = _Callbacks.makeHttpRequest(self, service, request)
+                extension.extensionUnloaded()
+                return response
+
+        extension.configuration = Configuration()
+        extension.catalogue = rules
+        extension.detector = ResponseDetector(rules)
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=probes)
+        extension.helpers = _Helpers()
+        extension.callbacks = _UnloadingCallbacks()
+        base = _Message(b"GET /selected HTTP/1.1\r\nHost: example.test\r\n\r\n")
+
+        class _InsertionPoint(object):
+            def getInsertionPointName(self):
+                return "query"
+
+            def buildRequest(self, payload):
+                return base.getRequest()
+
+        extension.doActiveScan(base, _InsertionPoint())
+
+        self.assertEqual(len(extension.callbacks.requests), 1)
+        self.assertEqual(extension.callbacks.issues, [])
 
     def test_response_normalisation_extracts_version_from_raw_bytes(self):
         extension = WafExtension()

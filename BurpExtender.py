@@ -1,13 +1,14 @@
 """Burp entry point for the WAF detection extension."""
 
-from burp import (IBurpExtender, IContextMenuFactory, IHttpListener,
-                  IScannerCheck, ITab)
+from burp import (IBurpExtender, IContextMenuFactory, IExtensionStateListener,
+                  IHttpListener, IScannerCheck, ITab)
 
 from wafd.extension import WafExtension
 
 
 class BurpExtender(IBurpExtender, IHttpListener, IScannerCheck,
-                   IContextMenuFactory, ITab, WafExtension):
+                   IContextMenuFactory, IExtensionStateListener, ITab,
+                   WafExtension):
     """Expose the extension through every legacy Burp API it registers."""
 
     def __init__(self):
@@ -45,6 +46,10 @@ class BurpExtender(IBurpExtender, IHttpListener, IScannerCheck,
     def createMenuItems(self, invocation):
         """Delegate ``IContextMenuFactory`` menu construction."""
         return WafExtension.createMenuItems(self, invocation)
+
+    def extensionUnloaded(self):
+        """Delegate Burp's extension lifecycle notification."""
+        return WafExtension.extensionUnloaded(self)
 
     def getTabCaption(self):
         """Delegate the ``ITab`` caption requested by Burp."""
