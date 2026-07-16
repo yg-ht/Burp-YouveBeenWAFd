@@ -4,6 +4,7 @@ import json
 import os
 import re
 import time
+from threading import Thread
 
 from .assessment import AssessmentStore
 from .burp_issue import WafScanIssue
@@ -957,10 +958,32 @@ class WafExtension(object):
             if not messages:
                 return []
             item = JMenuItem("Probe for WAF")
-            item.addActionListener(lambda event: self._probe_selected(messages[0]))
+            # Swing invokes menu listeners on its event dispatch thread. Burp
+            # rejects HTTP requests made on that UI thread, so schedule the
+            # complete probe operation on a dedicated background thread.
+            item.addActionListener(lambda event: self._start_selected_probe(messages[0]))
             return [item]
         except ImportError:
             return []
+
+    def _start_selected_probe(self, message):
+        """Schedule a context-menu probe away from Swing's UI thread."""
+        try:
+            # Jython implements threading.Thread with a JVM thread, keeping
+            # makeHttpRequest() off Swing's event dispatch thread while the
+            # existing probe method retains responsibility for error logging.
+            worker = Thread(
+                target=self._probe_selected,
+                args=(message,),
+                name="WAF Detector active probe")
+            # A background probe must not keep Burp's JVM alive during exit.
+            worker.setDaemon(True)
+            worker.start()
+        except Exception as error:
+            # Thread creation can fail under resource pressure or a restrictive
+            # runtime; report that failure without falling back to the UI thread.
+            self.callbacks.printError(
+                "WAF Detector could not start context probe: %s" % error)
 
     def _probe_selected(self, message):
         """Context-menu entry point; intentionally reuses Scanner behaviour."""
