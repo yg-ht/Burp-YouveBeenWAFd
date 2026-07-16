@@ -158,6 +158,45 @@ class ExtensionRequestLineTests(unittest.TestCase):
 
 
 class ExtensionActiveAdapterTests(unittest.TestCase):
+    def test_active_probe_accepts_selected_message_without_baseline_response(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"status","name":"Status signature","evidence_group":"status",'
+            '"weight":10,"matcher":{"kind":"status","values":[403]}},'
+            '{"id":"difference","name":"Differential","evidence_group":"difference",'
+            '"weight":10,"matcher":{"kind":"active_differential"}}]}')
+        probes = ProbeCatalogue.from_json('{"schema_version":2,"probes":[{'
+            '"id":"query-probe","value":"marker"}]}')
+        extension = WafExtension()
+        extension.configuration = Configuration()
+        extension.catalogue = rules
+        extension.detector = ResponseDetector(rules)
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=probes)
+        extension.helpers = _Helpers()
+        extension.callbacks = _Callbacks()
+
+        class _RequestOnlyMessage(_Message):
+            def getResponse(self):
+                return None
+
+        base = _RequestOnlyMessage(
+            b"GET /selected HTTP/1.1\r\nHost: example.test\r\n\r\n")
+
+        class _InsertionPoint(object):
+            def getInsertionPointName(self):
+                return "query"
+
+            def buildRequest(self, payload):
+                return base.getRequest()
+
+        extension.doActiveScan(base, _InsertionPoint())
+
+        self.assertEqual(len(extension.callbacks.requests), 1)
+        self.assertEqual(extension.callbacks.errors, [])
+        evidence = extension.assessments.assessments[
+            "https://example.test:443"].evidence
+        self.assertEqual([item.rule_id for item in evidence], ["status"])
+
     def test_context_menu_action_schedules_instead_of_probing_inline(self):
         class _MenuItem(object):
             def __init__(self, label):

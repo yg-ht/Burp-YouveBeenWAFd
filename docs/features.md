@@ -56,6 +56,11 @@ shared control. Legacy non-GET probes use an empty-body request to `/` as the
 control when `non_get_target` is `root`; if that control has no response, the
 selected response is used as the fallback.
 
+If neither the selected message nor the generated control has a response,
+active response signatures are still evaluated. Differential and transition
+rules are skipped because there is no valid baseline to compare, and the
+extension does not send an undeclared replacement control request.
+
 Every constructed specialist profile normally sends a same-shape control:
 
 1. The method, target policy, placement, content type, field name, multipart
