@@ -45,6 +45,15 @@ class WafScanIssueTests(unittest.TestCase):
         self.assertIsNone(issue.getIssueBackground())
         self.assertIsNone(issue.getRemediationBackground())
 
+    def test_issue_name_and_private_type_can_identify_historical_records(self):
+        issue = WafScanIssue(
+            object(), object(), "detail", "remediation", "Information",
+            "Firm", [], name="WAF Detector: active determination",
+            issue_type=7)
+
+        self.assertEqual(issue.getIssueName(), "WAF Detector: active determination")
+        self.assertEqual(issue.getIssueType(), 7)
+
 
 if __name__ == "__main__":
     unittest.main()

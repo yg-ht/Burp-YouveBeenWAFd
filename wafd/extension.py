@@ -11,6 +11,7 @@ from .burp_issue import WafScanIssue
 from .config import Configuration
 from .detector import ResponseDetector
 from .fingerprint import build_fingerprint
+from .models import ProbeOutcome
 from .overrides import CatalogueOverrides
 from .probes import ProbeCatalogue, ProbePlanner
 from .request_builder import ProbeRequestBuilder
@@ -57,6 +58,7 @@ class WafExtension(object):
         self._worker_lock = RLock()
         self._context_probe_workers = set()
         self._extension_unloaded = False
+        self._hydrated_origins = set()
 
     def registerExtenderCallbacks(self, callbacks):
         """Burp entry point; registration failures are reported to Burp output."""
@@ -667,12 +669,38 @@ class WafExtension(object):
         enabled_rules = set(rule.rule_id for rule in self.catalogue.rules if rule.enabled)
         enabled_probes = set(probe.probe_id for probe in self.probes.catalogue.probes
                              if probe.enabled)
-        for assessment in self.assessments.assessments.values():
-            assessment.evidence = [
-                item for item in assessment.evidence
-                if item.rule_id in enabled_rules and
-                (not item.characteristic or item.characteristic in enabled_probes)
-            ]
+        self.assessments.discard_disabled(enabled_rules, enabled_probes)
+
+    def _hydrate_assessment(self, origin):
+        """Lazily recover one origin from its existing current Burp issue."""
+        with self._worker_lock:
+            if origin in self._hydrated_origins:
+                return
+            try:
+                if not hasattr(self.callbacks, "getScanIssues"):
+                    return
+                issues = self.callbacks.getScanIssues(origin) or []
+                for issue in issues:
+                    if issue.getIssueName() != "WAF Detector: current assessment":
+                        continue
+                    enabled_probes = set(
+                        probe.probe_id
+                        for probe in self.probes.catalogue.probes
+                        if probe.enabled)
+                    restored = self.assessments.restore(
+                        origin, issue.getIssueDetail(), enabled_probes)
+                    if restored is not None:
+                        return
+            except Exception as error:
+                # Persisted issue detail is untrusted project data. Ignore
+                # invalid state without preventing a fresh assessment.
+                self.callbacks.printError(
+                    "WAF Detector ignored invalid assessment history for %s: %s" %
+                    (origin, error))
+            finally:
+                # Mark hydration complete only after recovery finishes so a
+                # concurrent callback cannot add evidence that restore erases.
+                self._hydrated_origins.add(origin)
 
     # IHttpListener ----------------------------------------------------
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
@@ -688,6 +716,7 @@ class WafExtension(object):
             response_info = self.helpers.analyzeResponse(messageInfo.getResponse())
             response = self._normalise_response(messageInfo.getResponse(), response_info)
             origin = self._origin(url)
+            self._hydrate_assessment(origin)
             evidence = self.detector.detect(origin, response)
             self.assessments.observe(origin, evidence, messageInfo)
             self._publish_issue(origin)
@@ -757,15 +786,13 @@ class WafExtension(object):
 
     def _publish_issue(self, origin):
         """Publish a replaceable current assessment for one origin."""
-        assessment = self.assessments.assessments[origin]
-        representative = assessment.representative_message
+        representative, score, detail = self.assessments.current_issue_snapshot(origin)
         if representative is None:
             # A legacy IScanIssue requires a concrete URL and HTTP service.
             # Observations normally provide one; avoid inventing Java objects
             # if an internal caller creates an assessment without a message.
             return
-        score = self.assessments.engine.score(assessment.evidence)[0]
-        confidence = "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
+        confidence = self._issue_confidence(score)
         suspected = score >= self.assessments.engine.threshold
         # Under the organisation's testing policy, a suspected WAF is a
         # high-severity engagement blocker rather than an informational note.
@@ -779,8 +806,25 @@ class WafExtension(object):
         # consolidateDuplicateIssues(), leaving one current assessment.
         issue = WafScanIssue(
             self._issue_url(origin, representative),
-            representative.getHttpService(), self.assessments.detail(origin),
+            representative.getHttpService(), detail,
             remediation, severity, confidence, [representative])
+        self.callbacks.addScanIssue(issue)
+
+    @staticmethod
+    def _issue_confidence(score):
+        """Map a numeric assessment score to Burp's legacy confidence labels."""
+        return "Certain" if score >= 0.85 else ("Firm" if score >= 0.60 else "Tentative")
+
+    def _publish_determination(self, origin, determination, representative):
+        """Publish one immutable informational audit issue for an active batch."""
+        issue = WafScanIssue(
+            self._issue_url(origin, representative),
+            representative.getHttpService(),
+            self.assessments.determination_detail(origin, determination),
+            "Historical record only; use the current-assessment issue for the "
+            "authoritative testing decision.",
+            "Information", self._issue_confidence(determination.score),
+            [representative], name="WAF Detector: active determination")
         self.callbacks.addScanIssue(issue)
 
     def _issue_url(self, origin, representative):
@@ -801,8 +845,19 @@ class WafExtension(object):
             if self._is_extension_unloaded():
                 return []
             request_info = self.helpers.analyzeRequest(baseRequestResponse)
+            origin = self._origin(request_info.getUrl())
+            self._hydrate_assessment(origin)
             name = insertionPoint.getInsertionPointName()
             probe_entries = self.probes.plan_entries(request_info.getMethod(), name)
+            if not probe_entries:
+                return []
+            batch_started_at = self.assessments._timestamp()
+            batch_evidence = []
+            batch_outcomes = []
+            skipped_characteristics = set()
+            tested_characteristics = set()
+            evaluated_rules_by_characteristic = {}
+            representative = baseRequestResponse
             method = str(request_info.getMethod()).upper()
             root_mode = (method not in ("GET", "HEAD", "OPTIONS") and
                          self.configuration.non_get_target == "root")
@@ -815,18 +870,23 @@ class WafExtension(object):
                 # the body is replaced with the configured probe marker.
                 root_headers[0] = "%s / HTTP/1.1" % method
                 control_request = self.helpers.buildHttpMessage(root_headers, "")
-                control, unused_state, unused_elapsed = self._send_active_request(
+                control, control_state, control_elapsed = self._send_active_request(
                     baseRequestResponse.getHttpService(), control_request)
                 if self._is_extension_unloaded():
                     return []
+                control_observed_at = self.assessments._timestamp()
+                control_status = 0
+                if control is not None and control.getResponse() is not None:
+                    control_status = self.helpers.analyzeResponse(
+                        control.getResponse()).getStatusCode()
+                batch_outcomes.append(ProbeOutcome(
+                    "shared-control", control_state, control_elapsed,
+                    control_status, control_observed_at))
                 if control is None or control.getResponse() is None:
                     # Falling back preserves scan availability, but means the
                     # selected response is the control for this comparison.
                     control = baseRequestResponse
-            results = []
             specialised_controls = {}
-            observed = False
-            origin = self._origin(request_info.getUrl())
             for probe in probe_entries:
                 # Unloading is cooperative because Burp's legacy HTTP API does
                 # not expose safe cancellation for an in-flight request.
@@ -859,10 +919,19 @@ class WafExtension(object):
                                     self._request_body_bytes(built_control.body))
                                 control_request = self._apply_probe_profile(
                                     control_request, control_profile)
-                                control, unused_state, unused_elapsed = self._send_active_request(
+                                control, control_state, control_elapsed = self._send_active_request(
                                     baseRequestResponse.getHttpService(), control_request)
                                 if self._is_extension_unloaded():
                                     return []
+                                control_observed_at = self.assessments._timestamp()
+                                control_status = 0
+                                if control is not None and control.getResponse() is not None:
+                                    control_status = self.helpers.analyzeResponse(
+                                        control.getResponse()).getStatusCode()
+                                batch_outcomes.append(ProbeOutcome(
+                                    "%s:control" % probe.probe_id,
+                                    control_state, control_elapsed,
+                                    control_status, control_observed_at))
                                 if control is None or control.getResponse() is None:
                                     control = baseRequestResponse
                                 specialised_controls[probe.probe_id] = control
@@ -878,12 +947,14 @@ class WafExtension(object):
                     # explicitly enabled probe in the active operation.
                     self.callbacks.printError(
                         "WAF Detector skipped probe %s: %s" % (probe.probe_id, error))
+                    skipped_characteristics.add(probe.probe_id)
                     continue
                 try:
                     request = self._apply_probe_profile(request, probe.profile)
                 except (ValueError, TypeError) as error:
                     self.callbacks.printError(
                         "WAF Detector skipped probe %s: %s" % (probe.probe_id, error))
+                    skipped_characteristics.add(probe.probe_id)
                     continue
                 response, connection_state, elapsed_ms = self._send_active_request(
                     baseRequestResponse.getHttpService(), request)
@@ -898,8 +969,17 @@ class WafExtension(object):
                     evidence = self.detector.detect(
                         origin, reset, "active", characteristic=probe.probe_id,
                         classification=probe.profile.get("classification", ""))
-                    self.assessments.observe(origin, evidence, baseRequestResponse)
-                    observed = True
+                    observed_at = self.assessments._timestamp()
+                    batch_outcomes.append(ProbeOutcome(
+                        probe.probe_id, connection_state, elapsed_ms, 0,
+                        observed_at))
+                    for item in evidence:
+                        item.observed_at = observed_at
+                    batch_evidence.extend(evidence)
+                    tested_characteristics.add(probe.probe_id)
+                    evaluated_rules_by_characteristic.setdefault(
+                        probe.probe_id, set()).update(
+                            self.detector.evaluable_rule_ids(False, False))
                     continue
                 response_info = self.helpers.analyzeResponse(response.getResponse())
                 normalised = self._normalise_response(
@@ -916,12 +996,29 @@ class WafExtension(object):
                 evidence = self.detector.detect(
                     origin, normalised, "active", baseline, probe.probe_id,
                     probe.profile.get("classification", ""))
-                self.assessments.observe(origin, evidence, response)
-                observed = True
-                results.append(response)
-            if observed:
-                # Publish once after the batch so a large matrix does not ask
-                # Burp to replace the same issue hundreds of times.
+                observed_at = self.assessments._timestamp()
+                batch_outcomes.append(ProbeOutcome(
+                    probe.probe_id, connection_state, elapsed_ms,
+                    response_info.getStatusCode(), observed_at))
+                for item in evidence:
+                    item.observed_at = observed_at
+                batch_evidence.extend(evidence)
+                tested_characteristics.add(probe.probe_id)
+                evaluated_rules_by_characteristic.setdefault(
+                    probe.probe_id, set()).update(
+                        self.detector.evaluable_rule_ids(
+                            True, baseline is not None))
+                representative = response
+            if tested_characteristics:
+                # Commit only after the batch completes. Repeated entries for
+                # one concrete probe are reconciled as one logical re-check.
+                unused_assessment, determination = self.assessments.reconcile_active(
+                    origin, tested_characteristics, batch_evidence,
+                    representative, batch_started_at,
+                    self.assessments._timestamp(), batch_outcomes,
+                    skipped_characteristics,
+                    evaluated_rules_by_characteristic)
+                self._publish_determination(origin, determination, representative)
                 self._publish_issue(origin)
             return []
         except Exception as error:
@@ -995,8 +1092,13 @@ class WafExtension(object):
         return self.helpers.buildHttpMessage(updated, body)
 
     def consolidateDuplicateIssues(self, existingIssue, newIssue):
-        # A new assessment contains the current evidence and supersedes the old.
-        return 1
+        # Only the authoritative current assessment is replaceable. Historical
+        # active determinations intentionally remain as separate audit records.
+        current_name = "WAF Detector: current assessment"
+        if (existingIssue.getIssueName() == current_name and
+                newIssue.getIssueName() == current_name):
+            return 1
+        return 0
 
     # IContextMenuFactory ----------------------------------------------
     def createMenuItems(self, invocation):

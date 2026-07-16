@@ -11,7 +11,8 @@ class WafScanIssue(IScanIssue):
     """Expose one current assessment through Burp's legacy issue interface."""
 
     def __init__(self, url, http_service, detail, remediation, severity,
-                 confidence, messages):
+                 confidence, messages,
+                 name="WAF Detector: current assessment", issue_type=0):
         self._url = url
         self._http_service = http_service
         self._detail = detail
@@ -19,17 +20,19 @@ class WafScanIssue(IScanIssue):
         self._severity = severity
         self._confidence = confidence
         self._messages = list(messages or [])
+        self._name = name
+        self._issue_type = int(issue_type)
 
     def getUrl(self):
         return self._url
 
     def getIssueName(self):
-        return "WAF Detector: current assessment"
+        return self._name
 
     def getIssueType(self):
         # Zero is appropriate for a private extension-defined issue type; the
         # stable name and URL drive duplicate consolidation.
-        return 0
+        return self._issue_type
 
     def getSeverity(self):
         return self._severity

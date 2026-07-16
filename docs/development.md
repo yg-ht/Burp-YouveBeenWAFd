@@ -15,7 +15,7 @@
 | `wafd/detector.py` | Burp-independent response matcher execution. |
 | `wafd/fingerprint.py` | Bounded response fields, hashes, redaction, and cookie fingerprints. |
 | `wafd/confidence.py` | Independent evidence-group scoring. |
-| `wafd/assessment.py` | Per-origin evidence and escaped issue HTML. |
+| `wafd/assessment.py` | Timestamped quality reconciliation, bounded recovery state, and escaped issue HTML. |
 | `wafd/models.py` | CPython dataclasses and Jython fallback models. |
 | `data/default_rules.json` | Shared passive/active rules. |
 | `data/probes.json` | Base probes, matrices, profiles, and research metadata. |
@@ -47,8 +47,8 @@ Scanner insertion point or context-menu action
   -> probe/repeat transmissions
   -> bounded fingerprints or classified transport failure
   -> zero-weight outcome plus differential/vendor rules
-  -> per-origin evidence keyed by rule and concrete probe
-  -> one current-assessment update after the batch
+  -> transactional evidence keyed by rule and concrete probe
+  -> one immutable active determination plus one current-assessment update
 ```
 
 ## Trust boundaries and defensive behaviour
@@ -145,14 +145,20 @@ Before release, manually verify:
 11. HTTP/1.1 and HTTP/2 responses retain a usable version field.
 12. Timeout/reset behaviour is represented as Burp exposes it on the platform.
 13. One current issue remains after a large active matrix.
+14. A failed active transport does not clear response-based qualities that
+    could not be re-evaluated, while connection-state qualities still update.
+15. Passive responses with no matching qualities advance the current issue's
+    latest-check timestamp, including after state restoration.
 
 ## Known limitations
 
 - Rule weights and the default 60% threshold require validation against
   confirmed customer deployments; the tracked TODO defines the test programme.
 - The project uses the legacy Extender API and Jython 2.7 rather than Montoya.
-- Assessments and representative messages are held in memory and are not
-  restored after extension reload or Burp exit.
+- Current assessment metadata is recovered from its bounded versioned Burp
+  issue state after reload. Complete representative HTTP messages are not
+  serialised by the extension; the next observation supplies the current
+  representative message.
 - Provider filtering exists in the planner API; the UI exposes provider data
   through its general catalogue text filter rather than a dedicated dropdown.
 - Expected-response fields in probe profiles are documentation; shared rules,

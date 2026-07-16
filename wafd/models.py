@@ -43,7 +43,7 @@ class Evidence(object):
     """
 
     def __init__(self, rule_id, origin, detail, product="", source="passive", action="",
-                 characteristic="", classification=""):
+                 characteristic="", classification="", observed_at=""):
         # Keep constructor ordering compatible with every existing detector
         # call while retaining named-argument support for specialist evidence.
         self.rule_id = rule_id
@@ -54,15 +54,66 @@ class Evidence(object):
         self.action = action
         self.characteristic = characteristic
         self.classification = classification
+        self.observed_at = observed_at
+
+
+class QualityState(object):
+    """Lifecycle timestamps and latest evidence for one detected quality."""
+
+    def __init__(self, evidence, first_detected_at, last_confirmed_at,
+                 cleared_at=""):
+        self.evidence = evidence
+        self.first_detected_at = first_detected_at
+        self.last_confirmed_at = last_confirmed_at
+        self.cleared_at = cleared_at
+
+
+class ProbeOutcome(object):
+    """Bounded transport result for one control or probe transmission."""
+
+    def __init__(self, characteristic, connection_state, elapsed_ms,
+                 status, observed_at):
+        self.characteristic = characteristic
+        self.connection_state = connection_state
+        self.elapsed_ms = max(0, int(elapsed_ms))
+        self.status = max(0, int(status))
+        self.observed_at = observed_at
+
+
+class Determination(object):
+    """Immutable summary of one committed active-probe batch."""
+
+    def __init__(self, started_at, completed_at, tested_characteristics,
+                 evidence, cleared_quality_keys, score, threshold,
+                 matched_evidence=None, outcomes=None,
+                 skipped_characteristics=None):
+        self.started_at = started_at
+        self.completed_at = completed_at
+        self.tested_characteristics = tuple(tested_characteristics)
+        self.evidence = tuple(evidence)
+        self.cleared_quality_keys = tuple(cleared_quality_keys)
+        self.score = float(score)
+        self.threshold = float(threshold)
+        self.suspected = self.score >= self.threshold
+        self.matched_evidence = tuple(matched_evidence or ())
+        self.outcomes = tuple(outcomes or ())
+        self.skipped_characteristics = tuple(skipped_characteristics or ())
 
 
 class OriginAssessment(object):
     """Current bounded assessment for one origin."""
 
-    def __init__(self, origin, evidence=None, representative_message=None):
+    def __init__(self, origin, evidence=None, representative_message=None,
+                 quality_states=None, determinations=None, last_checked_at=""):
         self.origin = origin
 
         # Copy caller-provided evidence so the assessment owns its mutable
         # collection and cannot accidentally modify a list held elsewhere.
         self.evidence = list(evidence) if evidence is not None else []
         self.representative_message = representative_message
+        self.quality_states = dict(quality_states or {})
+        self.determinations = list(determinations or [])
+        self.latest_cleared_quality_keys = []
+        # This advances for clean checks as well as matches. Quality timestamps
+        # alone cannot represent a passive response that produced no evidence.
+        self.last_checked_at = last_checked_at

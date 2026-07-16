@@ -8,8 +8,32 @@ import re
 class ResponseDetector(object):
     """Apply catalogue matchers to normalised response dictionaries."""
 
+    BASELINE_MATCHERS = frozenset((
+        "active_differential", "status_transition", "body_similarity_drop",
+        "header_delta", "body_hash_change", "cookie_delta",
+        "cookie_value_delta", "http_version_change", "challenge_transition",
+        "active_outcome",
+    ))
+
     def __init__(self, catalogue):
         self.catalogue = catalogue
+
+    def evaluable_rule_ids(self, response_available, baseline_available):
+        """Return enabled rules whose inputs were available for one probe.
+
+        A transport failure still evaluates connection-state rules, but it
+        cannot disprove qualities derived from HTTP status, headers, or body.
+        Likewise, differential rules require a usable control response.
+        """
+        evaluable = set()
+        for rule in self.catalogue.enabled():
+            kind = rule.matcher.get("kind")
+            if not response_available and kind != "connection_state":
+                continue
+            if kind in self.BASELINE_MATCHERS and not baseline_available:
+                continue
+            evaluable.add(rule.rule_id)
+        return evaluable
 
     def detect(self, origin, response, source="passive", baseline=None,
                characteristic="", classification=""):

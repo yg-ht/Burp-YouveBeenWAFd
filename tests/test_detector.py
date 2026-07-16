@@ -32,6 +32,24 @@ class DetectorTests(unittest.TestCase):
                                    "active", {"status": 200, "headers": {}, "body": "normal"})
         self.assertEqual(evidence[0].rule_id, "transition")
 
+    def test_evaluable_rules_distinguish_transport_response_and_baseline(self):
+        catalogue = RuleCatalogue.from_json('{"rules": ['
+            '{"id":"transport","name":"Transport","evidence_group":"transport",'
+            '"weight":10,"matcher":{"kind":"connection_state"}},'
+            '{"id":"status","name":"Status","evidence_group":"status",'
+            '"weight":10,"matcher":{"kind":"status","values":[403]}},'
+            '{"id":"transition","name":"Transition","evidence_group":"transition",'
+            '"weight":10,"matcher":{"kind":"status_transition","blocked":[403]}}]}')
+        detector = ResponseDetector(catalogue)
+
+        self.assertEqual(
+            detector.evaluable_rule_ids(False, False), {"transport"})
+        self.assertEqual(
+            detector.evaluable_rule_ids(True, False), {"transport", "status"})
+        self.assertEqual(
+            detector.evaluable_rule_ids(True, True),
+            {"transport", "status", "transition"})
+
     def test_body_similarity_rule_detects_challenge_replacement(self):
         catalogue = RuleCatalogue.from_json('{"rules": ['
             '{"id":"body","name":"Body","evidence_group":"behaviour","weight":20,'
