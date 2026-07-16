@@ -12,6 +12,7 @@ INTERFACE_NAMES = (
     "IHttpListener",
     "IScannerCheck",
     "IContextMenuFactory",
+    "IExtensionStateListener",
     "ITab",
 )
 
@@ -24,6 +25,7 @@ INTERFACE_METHODS = {
         "consolidateDuplicateIssues",
     ),
     "IContextMenuFactory": ("createMenuItems",),
+    "IExtensionStateListener": ("extensionUnloaded",),
     "ITab": ("getTabCaption", "getUiComponent"),
 }
 

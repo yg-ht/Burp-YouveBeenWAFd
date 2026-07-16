@@ -4,7 +4,7 @@ import json
 import os
 import re
 import time
-from threading import Thread
+from threading import RLock, Thread, current_thread
 
 from .assessment import AssessmentStore
 from .burp_issue import WafScanIssue
@@ -52,6 +52,11 @@ class WafExtension(object):
         self.request_builder = ProbeRequestBuilder()
         self.configuration = Configuration()
         self._panel = None
+        # Context-menu probes run outside Swing and may overlap extension
+        # unloading. Guard lifecycle state and worker bookkeeping together.
+        self._worker_lock = RLock()
+        self._context_probe_workers = set()
+        self._extension_unloaded = False
 
     def registerExtenderCallbacks(self, callbacks):
         """Burp entry point; registration failures are reported to Burp output."""
@@ -73,8 +78,22 @@ class WafExtension(object):
         callbacks.registerHttpListener(self)
         callbacks.registerScannerCheck(self)
         callbacks.registerContextMenuFactory(self)
+        callbacks.registerExtensionStateListener(self)
         callbacks.addSuiteTab(self)
         callbacks.printOutput("WAF Detector loaded with %d rules" % len(self.catalogue.rules))
+
+    def extensionUnloaded(self):
+        """Stop queued probe work when Burp unloads this extension instance."""
+        with self._worker_lock:
+            # Python/Jython threads cannot safely be killed. Workers check this
+            # flag before and between requests, allowing an in-flight Burp call
+            # to finish while preventing the remainder of its probe batch.
+            self._extension_unloaded = True
+
+    def _is_extension_unloaded(self):
+        """Return the extension lifecycle state under its worker lock."""
+        with self._worker_lock:
+            return self._extension_unloaded
 
     def _load_default_catalogue(self):
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
@@ -771,6 +790,8 @@ class WafExtension(object):
     def doActiveScan(self, baseRequestResponse, insertionPoint):
         """Run enabled probe profiles for a requested Scanner insertion point."""
         try:
+            if self._is_extension_unloaded():
+                return []
             request_info = self.helpers.analyzeRequest(baseRequestResponse)
             name = insertionPoint.getInsertionPointName()
             probe_entries = self.probes.plan_entries(request_info.getMethod(), name)
@@ -788,6 +809,8 @@ class WafExtension(object):
                 control_request = self.helpers.buildHttpMessage(root_headers, "")
                 control, unused_state, unused_elapsed = self._send_active_request(
                     baseRequestResponse.getHttpService(), control_request)
+                if self._is_extension_unloaded():
+                    return []
                 if control is None or control.getResponse() is None:
                     # Falling back preserves scan availability, but means the
                     # selected response is the control for this comparison.
@@ -797,6 +820,10 @@ class WafExtension(object):
             observed = False
             origin = self._origin(request_info.getUrl())
             for probe in probe_entries:
+                # Unloading is cooperative because Burp's legacy HTTP API does
+                # not expose safe cancellation for an in-flight request.
+                if self._is_extension_unloaded():
+                    return []
                 try:
                     if probe.profile.get("placement"):
                         # Specialist profiles construct both control and probe
@@ -826,6 +853,8 @@ class WafExtension(object):
                                     control_request, control_profile)
                                 control, unused_state, unused_elapsed = self._send_active_request(
                                     baseRequestResponse.getHttpService(), control_request)
+                                if self._is_extension_unloaded():
+                                    return []
                                 if control is None or control.getResponse() is None:
                                     control = baseRequestResponse
                                 specialised_controls[probe.probe_id] = control
@@ -850,6 +879,8 @@ class WafExtension(object):
                     continue
                 response, connection_state, elapsed_ms = self._send_active_request(
                     baseRequestResponse.getHttpService(), request)
+                if self._is_extension_unloaded():
+                    return []
                 if response is None or response.getResponse() is None:
                     # A reset/no-response outcome is itself behavioural
                     # evidence, but it must not be treated as HTTP status 0.
@@ -889,6 +920,8 @@ class WafExtension(object):
 
     def _send_active_request(self, service, request):
         """Return ``(message, connection_state, elapsed_ms)`` for one request."""
+        if self._is_extension_unloaded():
+            return None, "cancelled", 0
         started = time.time()
         try:
             message = self.callbacks.makeHttpRequest(service, request)
@@ -968,22 +1001,49 @@ class WafExtension(object):
 
     def _start_selected_probe(self, message):
         """Schedule a context-menu probe away from Swing's UI thread."""
+        worker = None
         try:
+            if self._is_extension_unloaded():
+                return
+            # Persist request, response and service while still inside the
+            # Swing callback. Editors such as Repeater may mutate their live
+            # message object as soon as this callback returns.
+            persisted_message = self.callbacks.saveBuffersToTempFiles(message)
+            if persisted_message is None:
+                raise ValueError("Burp did not return a persisted message")
             # Jython implements threading.Thread with a JVM thread, keeping
             # makeHttpRequest() off Swing's event dispatch thread while the
             # existing probe method retains responsibility for error logging.
             worker = Thread(
-                target=self._probe_selected,
-                args=(message,),
+                target=self._run_selected_probe,
+                args=(persisted_message,),
                 name="WAF Detector active probe")
             # A background probe must not keep Burp's JVM alive during exit.
             worker.setDaemon(True)
+            with self._worker_lock:
+                if self._extension_unloaded:
+                    return
+                self._context_probe_workers.add(worker)
             worker.start()
         except Exception as error:
+            if worker is not None:
+                with self._worker_lock:
+                    self._context_probe_workers.discard(worker)
             # Thread creation can fail under resource pressure or a restrictive
             # runtime; report that failure without falling back to the UI thread.
             self.callbacks.printError(
                 "WAF Detector could not start context probe: %s" % error)
+
+    def _run_selected_probe(self, message):
+        """Run one persisted probe and release its worker bookkeeping."""
+        try:
+            if not self._is_extension_unloaded():
+                self._probe_selected(message)
+        finally:
+            # Removing completed workers prevents the extension instance from
+            # retaining thread objects for every context-menu invocation.
+            with self._worker_lock:
+                self._context_probe_workers.discard(current_thread())
 
     def _probe_selected(self, message):
         """Context-menu entry point; intentionally reuses Scanner behaviour."""
