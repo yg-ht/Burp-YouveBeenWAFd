@@ -101,6 +101,12 @@ extension settings. If persistence fails:
 
 ### Active probing sends many requests
 
+Each completed active batch adds one informational historical determination
+issue and updates the single authoritative current-assessment issue. Historical
+issues are deliberately retained for audit and therefore increase with each
+manual or Scanner re-check. Use the current issue's severity and latest-check
+timestamp for the present testing decision.
+
 The default is every enabled concrete probe, and specialist profiles normally
 send an additional control. Before a broad run:
 

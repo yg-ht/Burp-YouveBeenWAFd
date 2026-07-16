@@ -152,8 +152,17 @@ builder. Length and hash therefore describe that prefix for a larger response.
 
 Evidence records rule ID, origin, detail, source, optional provider/action,
 concrete probe characteristic, and optional classification. Passive evidence
-is deduplicated by rule ID; active evidence is deduplicated by rule ID plus
-concrete probe ID. Storage is bounded at 5,000 observations per origin.
+is additive and deduplicated by rule ID. Active evidence is reconciled by rule
+ID plus concrete probe ID: a completed re-check replaces qualities for probes
+that actually ran, while skipped, disabled, cancelled, or failed-to-build
+probes cannot erase earlier evidence. Storage is bounded at 5,000 qualities per
+origin.
+
+Each quality records UTC first-detected and last-confirmed timestamps. A later
+successful re-check that no longer matches records when the quality was
+cleared. Repeated transmissions for one probe are combined before the batch is
+committed, and cancelled or fatally aborted batches do not create a misleading
+determination.
 
 A zero-weight `generic.probe-outcome` observation records each completed
 control/probe status pair. It makes permitted or unchanged outcomes visible
@@ -181,6 +190,20 @@ The issue contains:
 - malformed-request classifications where applicable; and
 - escaped response-derived details.
 
+The current issue also shows its latest check time, lifecycle timestamps for
+current qualities, qualities cleared by the latest re-check, and summaries of
+the latest 50 active determinations. It contains a bounded versioned state
+marker so this metadata can be recovered lazily from the Burp project after an
+extension reload. Invalid, unknown-version, mismatched-origin, or oversized
+state is ignored and reported without preventing a fresh assessment.
+
+Every completed active batch also publishes a separate **WAF Detector: active
+determination** issue. These immutable Information-severity audit records show
+the batch start/completion times, tested probes, matched and cleared qualities,
+per-transmission status/connection/timing outcomes, skipped probes, and the
+complete qualities behind that determination. They are never consolidated;
+only the current-assessment issue is replaceable.
+
 An active matrix publishes once after the batch rather than replacing the same
 issue after every request. Burp confidence labels remain: Certain at 85% or
 above, Firm at 60–84%, and Tentative below 60%.
@@ -190,6 +213,10 @@ An assessment at or above the configured WAF threshold is published as
 **High**, with remediation directing the operator to stop active testing and
 confirm that the target is approved under the no-WAF policy. A below-threshold
 no-indicators assessment remains **Information**.
+
+Historical determination issues remain **Information** even if their recorded
+verdict was WAF suspected. This prevents an old High issue from appearing to be
+the current policy decision after a successful downgrade.
 
 ## Provider and action separation
 

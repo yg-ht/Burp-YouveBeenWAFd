@@ -6,12 +6,15 @@ from pathlib import Path
 import unittest
 from unittest import mock
 
+import wafd.assessment as assessment_module
 import wafd.config as config_module
 import wafd.overrides as overrides_module
 import wafd.probes as probes_module
 import wafd.rules as rules_module
+from wafd.assessment import AssessmentStore
 from wafd.config import Configuration
 from wafd.fingerprint import build_fingerprint
+from wafd.models import Evidence, Rule
 from wafd.overrides import CatalogueOverrides
 from wafd.probes import ProbeCatalogue, ProbePlanner
 from wafd.request_builder import ProbeRequestBuilder
@@ -110,13 +113,33 @@ class JythonJsonCompatibilityTests(unittest.TestCase):
         self.assertFalse(overrides.rules["rule-id"])
         self.assertTrue(overrides.probes["probe-id"])
 
+    def test_assessment_state_accepts_jython_unicode_metadata(self):
+        rule = Rule("rule", "Rule", "group", 60)
+        original = AssessmentStore([rule], clock=lambda: "unused")
+        original.observe(
+            "https://example.test", [Evidence(
+                "rule", "https://example.test", "matched", product="café")],
+            observed_at="2026-01-01T00:00:00Z")
+        detail = original.detail("https://example.test")
+        decoded = _as_jython_json(original._state_payload(detail))
+
+        restored = AssessmentStore([rule], clock=lambda: "unused")
+        with mock.patch.object(assessment_module.json, "loads", return_value=decoded):
+            with mock.patch.object(
+                    assessment_module, "string_types", (str, JythonUnicode)):
+                assessment = restored.restore("https://example.test", detail)
+
+        self.assertEqual(
+            str(assessment.evidence[0].product), "café")
+        self.assertIn("café", restored.detail("https://example.test"))
+
     def test_json_consumers_do_not_validate_text_as_str_only(self):
         # A direct ``isinstance(value, str)`` silently rejects Python 2
         # ``unicode``.  Keep every persisted or bundled JSON consumer on the
         # shared-runtime string alias used by its module.
         source_paths = [
             self.project_root / "wafd" / name
-            for name in ("config.py", "overrides.py", "probes.py", "rules.py")
+            for name in ("assessment.py", "config.py", "overrides.py", "probes.py", "rules.py")
         ]
         failures = []
         for source_path in source_paths:

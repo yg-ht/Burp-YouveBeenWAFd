@@ -68,12 +68,25 @@ class QualityState(object):
         self.cleared_at = cleared_at
 
 
+class ProbeOutcome(object):
+    """Bounded transport result for one control or probe transmission."""
+
+    def __init__(self, characteristic, connection_state, elapsed_ms,
+                 status, observed_at):
+        self.characteristic = characteristic
+        self.connection_state = connection_state
+        self.elapsed_ms = max(0, int(elapsed_ms))
+        self.status = max(0, int(status))
+        self.observed_at = observed_at
+
+
 class Determination(object):
     """Immutable summary of one committed active-probe batch."""
 
     def __init__(self, started_at, completed_at, tested_characteristics,
                  evidence, cleared_quality_keys, score, threshold,
-                 matched_evidence=None):
+                 matched_evidence=None, outcomes=None,
+                 skipped_characteristics=None):
         self.started_at = started_at
         self.completed_at = completed_at
         self.tested_characteristics = tuple(tested_characteristics)
@@ -83,6 +96,8 @@ class Determination(object):
         self.threshold = float(threshold)
         self.suspected = self.score >= self.threshold
         self.matched_evidence = tuple(matched_evidence or ())
+        self.outcomes = tuple(outcomes or ())
+        self.skipped_characteristics = tuple(skipped_characteristics or ())
 
 
 class OriginAssessment(object):

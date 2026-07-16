@@ -15,7 +15,7 @@
 | `wafd/detector.py` | Burp-independent response matcher execution. |
 | `wafd/fingerprint.py` | Bounded response fields, hashes, redaction, and cookie fingerprints. |
 | `wafd/confidence.py` | Independent evidence-group scoring. |
-| `wafd/assessment.py` | Per-origin evidence and escaped issue HTML. |
+| `wafd/assessment.py` | Timestamped quality reconciliation, bounded recovery state, and escaped issue HTML. |
 | `wafd/models.py` | CPython dataclasses and Jython fallback models. |
 | `data/default_rules.json` | Shared passive/active rules. |
 | `data/probes.json` | Base probes, matrices, profiles, and research metadata. |
@@ -47,8 +47,8 @@ Scanner insertion point or context-menu action
   -> probe/repeat transmissions
   -> bounded fingerprints or classified transport failure
   -> zero-weight outcome plus differential/vendor rules
-  -> per-origin evidence keyed by rule and concrete probe
-  -> one current-assessment update after the batch
+  -> transactional evidence keyed by rule and concrete probe
+  -> one immutable active determination plus one current-assessment update
 ```
 
 ## Trust boundaries and defensive behaviour
@@ -151,8 +151,10 @@ Before release, manually verify:
 - Rule weights and the default 60% threshold require validation against
   confirmed customer deployments; the tracked TODO defines the test programme.
 - The project uses the legacy Extender API and Jython 2.7 rather than Montoya.
-- Assessments and representative messages are held in memory and are not
-  restored after extension reload or Burp exit.
+- Current assessment metadata is recovered from its bounded versioned Burp
+  issue state after reload. Complete representative HTTP messages are not
+  serialised by the extension; the next observation supplies the current
+  representative message.
 - Provider filtering exists in the planner API; the UI exposes provider data
   through its general catalogue text filter rather than a dedicated dropdown.
 - Expected-response fields in probe profiles are documentation; shared rules,
