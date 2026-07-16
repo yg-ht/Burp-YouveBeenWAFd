@@ -896,8 +896,15 @@ class WafExtension(object):
                 response_info = self.helpers.analyzeResponse(response.getResponse())
                 normalised = self._normalise_response(
                     response.getResponse(), response_info, elapsed_ms)
-                baseline_info = self.helpers.analyzeResponse(control.getResponse())
-                baseline = self._normalise_response(control.getResponse(), baseline_info)
+                baseline = None
+                control_response = control.getResponse() if control is not None else None
+                if control_response is not None:
+                    # Request-only selections and failed controls have no safe
+                    # baseline to parse. Passing None deliberately disables
+                    # differential rules while retaining response signatures.
+                    baseline_info = self.helpers.analyzeResponse(control_response)
+                    baseline = self._normalise_response(
+                        control_response, baseline_info)
                 evidence = self.detector.detect(
                     origin, normalised, "active", baseline, probe.probe_id,
                     probe.profile.get("classification", ""))
