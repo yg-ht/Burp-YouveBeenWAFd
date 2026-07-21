@@ -1,3 +1,5 @@
+import base64
+import json
 import sys
 import types
 import unittest
@@ -97,6 +99,7 @@ class _Callbacks(object):
         self.saved_messages = []
         self.persisted_message = None
         self.existing_scan_issues = []
+        self.settings = {}
 
     def makeHttpRequest(self, service, request):
         self.requests.append(request)
@@ -111,6 +114,15 @@ class _Callbacks(object):
 
     def getScanIssues(self, url_prefix):
         return self.existing_scan_issues
+
+    def loadExtensionSetting(self, name):
+        return self.settings.get(name)
+
+    def saveExtensionSetting(self, name, value):
+        if value is None:
+            self.settings.pop(name, None)
+        else:
+            self.settings[name] = value
 
     def printError(self, message):
         self.errors.append(message)
@@ -192,6 +204,121 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
 
         assessment = extension.assessments.assessments[origin]
         self.assertEqual([item.rule_id for item in assessment.evidence], ["r"])
+
+    def test_hydration_uses_newest_determination_state_regardless_of_issue_order(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"old","name":"Old","evidence_group":"old","weight":10},'
+            '{"id":"new","name":"New","evidence_group":"new","weight":10}]}')
+        origin = "https://example.test:443"
+        old_store = AssessmentStore(rules.rules, clock=lambda: "unused")
+        old_store.observe(
+            origin, [Evidence("old", origin, "old")],
+            observed_at="2026-01-01T00:00:00Z")
+        new_store = AssessmentStore(rules.rules, clock=lambda: "unused")
+        new_store.observe(
+            origin, [Evidence("new", origin, "new")],
+            observed_at="2026-01-02T00:00:00Z")
+
+        class _ExistingIssue(object):
+            def __init__(self, detail):
+                self.detail = detail
+
+            def getIssueName(self):
+                return WafExtension.DETERMINATION_ISSUE_NAME
+
+            def getIssueDetail(self):
+                return self.detail
+
+        extension = WafExtension()
+        extension.catalogue = rules
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
+        extension.callbacks = _Callbacks()
+        extension.callbacks.existing_scan_issues = [
+            _ExistingIssue(new_store.detail(origin)),
+            _ExistingIssue(old_store.detail(origin)),
+        ]
+
+        extension._hydrate_assessment(origin)
+
+        assessment = extension.assessments.assessments[origin]
+        self.assertEqual([item.rule_id for item in assessment.evidence], ["new"])
+
+    def test_hydration_falls_back_when_newest_state_is_invalid(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"old","name":"Old","evidence_group":"old","weight":10}]}')
+        origin = "https://example.test:443"
+        store = AssessmentStore(rules.rules, clock=lambda: "unused")
+        store.observe(
+            origin, [Evidence("old", origin, "old")],
+            observed_at="2026-01-01T00:00:00Z")
+        valid_detail = store.detail(origin)
+        invalid_document = store._state_payload(valid_detail)
+        invalid_document["last_checked_at"] = "2026-01-02T00:00:00Z"
+        invalid_document["qualities"] = "invalid"
+        invalid_payload = base64.b64encode(json.dumps(
+            invalid_document, separators=(",", ":"),
+            sort_keys=True).encode("utf-8")).decode("ascii")
+        invalid_detail = "%s%s%s" % (
+            store.STATE_PREFIX, invalid_payload, store.STATE_SUFFIX)
+
+        class _ExistingIssue(object):
+            def __init__(self, detail):
+                self.detail = detail
+
+            def getIssueName(self):
+                return WafExtension.DETERMINATION_ISSUE_NAME
+
+            def getIssueDetail(self):
+                return self.detail
+
+        extension = WafExtension()
+        extension.catalogue = rules
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
+        extension.callbacks = _Callbacks()
+        extension.callbacks.existing_scan_issues = [
+            _ExistingIssue(valid_detail), _ExistingIssue(invalid_detail)]
+
+        extension._hydrate_assessment(origin)
+
+        assessment = extension.assessments.assessments[origin]
+        self.assertEqual([item.rule_id for item in assessment.evidence], ["old"])
+        self.assertEqual(len(extension.callbacks.errors), 1)
+
+    def test_invalid_saved_passive_state_falls_back_to_issue_state(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"r","name":"Rule","evidence_group":"g","weight":60}]}')
+        origin = "https://example.test:443"
+        store = AssessmentStore(rules.rules, clock=lambda: "unused")
+        store.observe(
+            origin, [Evidence("r", origin, "issue state")],
+            observed_at="2026-01-01T00:00:00Z")
+
+        class _ExistingIssue(object):
+            def getIssueName(self):
+                return WafExtension.DETERMINATION_ISSUE_NAME
+
+            def getIssueDetail(self):
+                return store.detail(origin)
+
+        extension = WafExtension()
+        extension.catalogue = rules
+        extension.assessments = AssessmentStore(rules.rules)
+        extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
+        extension.callbacks = _Callbacks()
+        extension.callbacks.existing_scan_issues = [_ExistingIssue()]
+        setting_name = extension._assessment_state_setting_name(origin)
+        extension.callbacks.settings[setting_name] = "<!-- WAFD_STATE_V1:invalid -->"
+
+        extension._hydrate_assessment(origin)
+
+        assessment = extension.assessments.assessments[origin]
+        self.assertEqual([item.rule_id for item in assessment.evidence], ["r"])
+        self.assertEqual(len(extension.callbacks.errors), 1)
 
     def test_hydration_excludes_evidence_for_a_disabled_probe(self):
         rules = RuleCatalogue.from_json('{"rules":['
@@ -276,15 +403,18 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             def buildRequest(self, payload):
                 return base.getRequest()
 
-        extension.doActiveScan(base, _InsertionPoint())
+        issues = extension.doActiveScan(base, _InsertionPoint())
 
         assessment = extension.assessments.assessments[origin]
         self.assertEqual(assessment.evidence, [])
-        self.assertEqual(extension.callbacks.issues[-1].getSeverity(), "Information")
+        self.assertEqual([issue.getIssueName() for issue in issues],
+                         [WafExtension.DETERMINATION_ISSUE_NAME])
+        self.assertEqual(issues[0].getSeverity(), "Information")
         self.assertIn("blocked [query-probe]",
-                      extension.callbacks.issues[-2].getIssueDetail())
+                      issues[0].getIssueDetail())
+        self.assertEqual(extension.callbacks.issues, [])
 
-    def test_active_recheck_publishes_history_and_downgrades_current_issue(self):
+    def test_active_recheck_returns_history_and_keeps_one_concern(self):
         rules = RuleCatalogue.from_json('{"rules":['
             '{"id":"blocked","name":"Blocked","evidence_group":"blocked",'
             '"weight":60,"matcher":{"kind":"status","values":[403]}}]}')
@@ -326,18 +456,17 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             def buildRequest(self, payload):
                 return base.getRequest()
 
-        extension.doActiveScan(base, _InsertionPoint())
-        extension.doActiveScan(base, _InsertionPoint())
+        first_issues = extension.doActiveScan(base, _InsertionPoint())
+        second_issues = extension.doActiveScan(base, _InsertionPoint())
 
-        issues = extension.callbacks.issues
+        issues = first_issues + second_issues
         self.assertEqual(
             [issue.getIssueName() for issue in issues],
-            ["WAF Detector: active determination",
-             "WAF Detector: current assessment",
-             "WAF Detector: active determination",
-             "WAF Detector: current assessment"])
+            [WafExtension.DETERMINATION_ISSUE_NAME,
+             WafExtension.CONCERN_ISSUE_NAME,
+             WafExtension.DETERMINATION_ISSUE_NAME])
         self.assertEqual([issue.getSeverity() for issue in issues],
-                         ["Information", "High", "Information", "Information"])
+                         ["Information", "High", "Information"])
         self.assertIn("2026-01-01T00:01:00Z", issues[0].getIssueDetail())
         self.assertIn("query-probe] at 2026-01-01T00:00:30Z",
                       issues[0].getIssueDetail())
@@ -348,9 +477,10 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         assessment = extension.assessments.assessments[
             "https://example.test:443"]
         self.assertEqual(assessment.evidence, [])
-        self.assertEqual(extension.consolidateDuplicateIssues(issues[1], issues[3]), 1)
+        self.assertEqual(extension.consolidateDuplicateIssues(issues[1], issues[1]), -1)
         self.assertEqual(extension.consolidateDuplicateIssues(issues[0], issues[2]), 0)
         self.assertEqual(extension.consolidateDuplicateIssues(issues[1], issues[2]), 0)
+        self.assertEqual(extension.callbacks.issues, [])
 
     def test_active_transport_failure_preserves_response_qualities(self):
         rules = RuleCatalogue.from_json('{"rules":['
@@ -389,7 +519,7 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             def buildRequest(self, payload):
                 return base.getRequest()
 
-        extension.doActiveScan(base, _InsertionPoint())
+        issues = extension.doActiveScan(base, _InsertionPoint())
 
         assessment = extension.assessments.assessments[origin]
         self.assertEqual(
@@ -397,16 +527,16 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             ["blocked", "reset"])
         self.assertEqual(
             assessment.determinations[-1].cleared_quality_keys, ())
-        self.assertEqual(extension.callbacks.issues[-1].getSeverity(), "High")
+        self.assertEqual(issues[-1].getSeverity(), "High")
 
-    def test_published_issue_severity_tracks_inclusive_waf_threshold(self):
+    def test_concern_uses_inclusive_waf_threshold(self):
         rules = RuleCatalogue.from_json('{"rules":['
             '{"id":"below","name":"Below","evidence_group":"below","weight":59},'
             '{"id":"boundary","name":"Boundary","evidence_group":"boundary",'
             '"weight":60}]}')
 
-        for rule_id, expected_severity in (("below", "Information"),
-                                           ("boundary", "High")):
+        for rule_id, expected_issue in (("below", False),
+                                        ("boundary", True)):
             extension = WafExtension()
             extension.helpers = _Helpers()
             extension.callbacks = _Callbacks()
@@ -417,12 +547,129 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             extension.assessments.observe(
                 origin, [Evidence(rule_id, origin, "matched")], representative)
 
-            extension._publish_issue(origin)
+            issue = extension._build_concern_issue(origin)
 
-            issue = extension.callbacks.issues[0]
-            self.assertEqual(issue.getSeverity(), expected_severity)
-            if expected_severity == "High":
+            self.assertEqual(issue is not None, expected_issue)
+            if expected_issue:
+                self.assertEqual(issue.getSeverity(), "High")
                 self.assertIn("Stop active testing", issue.getRemediationDetail())
+            self.assertEqual(extension.callbacks.issues, [])
+
+    def test_passive_listener_raises_one_concern_only_at_threshold(self):
+        for weight, expected_count in ((59, 0), (60, 1)):
+            rules = RuleCatalogue.from_json('{"rules":['
+                '{"id":"blocked","name":"Blocked","evidence_group":"blocked",'
+                '"weight":%d,"matcher":{"kind":"status","values":[403]}}]}' %
+                weight)
+            extension = WafExtension()
+            extension.configuration = Configuration(in_scope_only=False)
+            extension.catalogue = rules
+            extension.detector = ResponseDetector(rules)
+            extension.assessments = AssessmentStore(
+                rules.rules, extension.configuration.threshold)
+            extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+                '{"schema_version":2,"probes":[]}'))
+            extension.helpers = _Helpers()
+            extension.callbacks = _Callbacks()
+            message = _Message(
+                b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n",
+                b"HTTP/1.1 403 Forbidden\r\n\r\nblocked")
+
+            extension.processHttpMessage(1, False, message)
+            extension.processHttpMessage(1, False, message)
+
+            self.assertEqual(len(extension.callbacks.issues), expected_count)
+            if expected_count:
+                self.assertEqual(
+                    extension.callbacks.issues[0].getIssueName(),
+                    WafExtension.CONCERN_ISSUE_NAME)
+
+    def test_passive_updates_after_concern_restore_from_saved_latest_state(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"blocked","name":"Blocked","evidence_group":"blocked",'
+            '"weight":60,"matcher":{"kind":"status","values":[403]}},'
+            '{"id":"limited","name":"Limited","evidence_group":"limited",'
+            '"weight":10,"matcher":{"kind":"status","values":[429]}}]}')
+        timestamps = iter(("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"))
+        extension = WafExtension()
+        extension.configuration = Configuration(in_scope_only=False)
+        extension.catalogue = rules
+        extension.detector = ResponseDetector(rules)
+        extension.assessments = AssessmentStore(
+            rules.rules, extension.configuration.threshold,
+            clock=lambda: next(timestamps))
+        extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
+        extension.helpers = _Helpers()
+        extension.callbacks = _Callbacks()
+        request = b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n"
+
+        extension.processHttpMessage(1, False, _Message(
+            request, b"HTTP/1.1 403 Forbidden\r\n\r\nblocked"))
+        extension.processHttpMessage(1, False, _Message(
+            request, b"HTTP/1.1 429 Too Many Requests\r\n\r\nlimited"))
+
+        self.assertEqual(len(extension.callbacks.issues), 1)
+        origin = "https://example.test:443"
+        setting_name = extension._assessment_state_setting_name(origin)
+        self.assertIn(setting_name, extension.callbacks.settings)
+
+        restored = WafExtension()
+        restored.configuration = Configuration(in_scope_only=False)
+        restored.catalogue = rules
+        restored.assessments = AssessmentStore(rules.rules)
+        restored.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
+        restored.callbacks = _Callbacks()
+        restored.callbacks.settings = dict(extension.callbacks.settings)
+        restored.callbacks.existing_scan_issues = [extension.callbacks.issues[0]]
+
+        restored._hydrate_assessment(origin)
+
+        assessment = restored.assessments.assessments[origin]
+        self.assertEqual([item.rule_id for item in assessment.evidence],
+                         ["blocked", "limited"])
+        self.assertEqual(assessment.last_checked_at, "2026-01-02T00:00:00Z")
+        self.assertTrue(restored._has_reported_concern(origin))
+
+    def test_lowered_threshold_raises_concern_from_restored_determination(self):
+        rules = RuleCatalogue.from_json('{"rules":['
+            '{"id":"signal","name":"Signal","evidence_group":"signal",'
+            '"weight":60,"matcher":{"kind":"status","values":[403]}}]}')
+        origin = "https://example.test:443"
+        previous = AssessmentStore(rules.rules, threshold=0.80,
+                                   clock=lambda: "unused")
+        previous.observe(
+            origin, [Evidence("signal", origin, "historical signal")],
+            observed_at="2026-01-01T00:00:00Z")
+
+        class _DeterminationIssue(object):
+            def getIssueName(self):
+                return WafExtension.DETERMINATION_ISSUE_NAME
+
+            def getIssueDetail(self):
+                return previous.detail(origin)
+
+        extension = WafExtension()
+        extension.configuration = Configuration(
+            threshold=0.50, in_scope_only=False)
+        extension.catalogue = rules
+        extension.detector = ResponseDetector(rules)
+        extension.assessments = AssessmentStore(rules.rules, threshold=0.50)
+        extension.probes = ProbePlanner(catalogue=ProbeCatalogue.from_json(
+            '{"schema_version":2,"probes":[]}'))
+        extension.helpers = _Helpers()
+        extension.callbacks = _Callbacks()
+        extension.callbacks.existing_scan_issues = [_DeterminationIssue()]
+        message = _Message(
+            b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n",
+            b"HTTP/1.1 200 OK\r\n\r\nordinary")
+
+        extension.processHttpMessage(1, False, message)
+
+        self.assertEqual(len(extension.callbacks.issues), 1)
+        self.assertEqual(extension.callbacks.issues[0].getIssueName(),
+                         WafExtension.CONCERN_ISSUE_NAME)
 
     def test_active_probe_accepts_selected_message_without_baseline_response(self):
         rules = RuleCatalogue.from_json('{"rules":['
@@ -455,7 +702,7 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             def buildRequest(self, payload):
                 return base.getRequest()
 
-        extension.doActiveScan(base, _InsertionPoint())
+        issues = extension.doActiveScan(base, _InsertionPoint())
 
         self.assertEqual(len(extension.callbacks.requests), 1)
         self.assertEqual(extension.callbacks.errors, [])
@@ -542,6 +789,24 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
 
         extension._probe_selected.assert_called_once_with(persisted_message)
         self.assertEqual(extension._context_probe_workers, set())
+
+    def test_context_probe_submits_issues_returned_by_active_logic(self):
+        extension = WafExtension()
+        extension.helpers = _Helpers()
+        extension.callbacks = _Callbacks()
+        determination = mock.Mock()
+        determination.getIssueName.return_value = WafExtension.DETERMINATION_ISSUE_NAME
+        concern = mock.Mock()
+        concern.getIssueName.return_value = WafExtension.CONCERN_ISSUE_NAME
+        extension.doActiveScan = mock.Mock(
+            return_value=[determination, concern])
+        message = _Message(
+            b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n")
+
+        extension._probe_selected(message)
+
+        self.assertEqual(extension.callbacks.issues,
+                         [determination, concern])
 
     def test_queued_context_worker_is_discarded_without_probing_after_unload(self):
         extension = WafExtension()
@@ -638,7 +903,7 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
             def buildRequest(self, payload):
                 raise AssertionError("specialist profile must use the request builder")
 
-        extension.doActiveScan(base, _InsertionPoint())
+        issues = extension.doActiveScan(base, _InsertionPoint())
 
         self.assertEqual(extension.callbacks.errors, [])
         self.assertEqual(len(extension.callbacks.requests), 3)
@@ -648,12 +913,13 @@ class ExtensionActiveAdapterTests(unittest.TestCase):
         bodies = [request.split(b"\r\n\r\n", 1)[1]
                   for request in extension.callbacks.requests]
         self.assertEqual(bodies, [b"ordinary", b"marker", b"marker"])
-        self.assertEqual(len(extension.callbacks.issues), 2)
+        self.assertEqual(len(issues), 1)
         self.assertEqual(
-            [issue.getIssueName() for issue in extension.callbacks.issues],
-            ["WAF Detector: active determination",
-             "WAF Detector: current assessment"])
-        self.assertEqual(extension.callbacks.issues[0].getSeverity(), "Information")
+            [issue.getIssueName() for issue in issues],
+            [WafExtension.DETERMINATION_ISSUE_NAME])
+        self.assertEqual(issues[0].getSeverity(), "Information")
+        self.assertEqual(len(issues[0].getHttpMessages()), 4)
+        self.assertEqual(extension.callbacks.issues, [])
 
     def test_active_transport_exceptions_are_classified_without_escaping(self):
         extension = WafExtension()

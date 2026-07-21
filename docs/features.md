@@ -15,8 +15,9 @@ The HTTP listener analyses a response when:
 
 Passive detection does not send requests. It normalises a bounded response
 fingerprint, evaluates enabled rules that do not require a control, updates the
-origin assessment, and publishes its current issue. An analysis failure is
-reported to Burp's extension error output without interrupting Burp traffic.
+origin assessment, and publishes a concern only if the configured threshold is
+reached. An analysis failure is reported to Burp's extension error output
+without interrupting Burp traffic.
 
 ## Active detection
 
@@ -163,7 +164,7 @@ Each quality records UTC first-detected and last-confirmed timestamps. A later
 successful re-check that no longer matches records when the quality was
 cleared. Repeated transmissions for one probe are combined before the batch is
 committed, and cancelled or fatally aborted batches do not create a misleading
-determination. The current issue's latest-check timestamp also advances for a
+determination. The internal latest-check timestamp also advances for a
 successfully analysed passive response that produces no qualities.
 
 A zero-weight `generic.probe-outcome` observation records each completed
@@ -176,49 +177,61 @@ caps the result at 100%. Rule aliases therefore cannot stack, unrelated
 provider catalogues cannot dilute an assessment, and audit observations with
 weight zero do not contribute. The default WAF threshold is an inclusive 60%.
 
-## Current-assessment issues
+## Determination and concern issues
 
-After passive observation or an active batch, the extension publishes
-**WAF Detector: current assessment** for the origin. Burp replaces the previous
-issue with the current view.
+Every completed active batch publishes one **WAF Detector: probe
+determination** issue. These immutable Information-severity audit records show
+the batch start/completion times, tested probes, matched and cleared qualities,
+per-transmission status/connection/timing outcomes, skipped probes, and the
+complete qualities behind that determination. Their HTTP message attachments
+contain the selected message and every successful control/probe exchange.
 
-The issue contains:
+Each determination contains a bounded versioned state marker so the latest
+valid assessment can be recovered lazily from the Burp project after an
+extension reload. Invalid, unknown-version, mismatched-origin, or oversized
+state is ignored and reported without preventing a fresh assessment.
 
-- WAF suspected/no-indicators state;
+After a concern has been recorded, later passive observations persist the same
+bounded state through a per-origin Burp extension setting. This updates reload
+state without creating another visible issue. Hydration compares saved passive
+state with issue markers and restores the newest valid candidate; an issue
+marker remains the fallback if the saved value is absent or invalid.
+
+When passive or active evidence reaches the inclusive configured threshold,
+the extension raises one **WAF Detector: WAF suspected** concern for the
+origin. The High-severity concern contains:
+
+- the WAF-suspected state;
 - confidence and configured threshold;
 - provider/edge signals;
 - observed security actions;
 - rule and concrete probe IDs;
-- malformed-request classifications where applicable; and
-- escaped response-derived details.
+- malformed-request classifications where applicable;
+- escaped response-derived details; and
+- the representative request/response supporting the first concern.
 
-The current issue also shows its latest check time, lifecycle timestamps for
-current qualities, qualities cleared by the latest re-check, and summaries of
-the latest 50 active determinations. It contains a bounded versioned state
-marker so this metadata can be recovered lazily from the Burp project after an
-extension reload. Invalid, unknown-version, mismatched-origin, or oversized
-state is ignored and reported without preventing a fresh assessment.
-
-Every completed active batch also publishes a separate **WAF Detector: active
-determination** issue. These immutable Information-severity audit records show
-the batch start/completion times, tested probes, matched and cleared qualities,
-per-transmission status/connection/timing outcomes, skipped probes, and the
-complete qualities behind that determination. They are never consolidated;
-only the current-assessment issue is replaceable.
+The concern records that the testing-policy condition occurred; it is not a
+current-status dashboard. A later clean re-check does not delete the finding,
+because the legacy Burp API provides no reliable issue-removal operation. The
+new determination records the cleared qualities and current clean result.
+Repeated concern submissions are suppressed per origin.
+Only an existing concern or legacy High current-assessment issue activates
+that suppression. Historical evidence is rescored using the current threshold,
+but its score alone does not imply that a concern was previously reported.
 
 An active matrix publishes once after the batch rather than replacing the same
 issue after every request. Burp confidence labels remain: Certain at 85% or
 above, Firm at 60–84%, and Tentative below 60%.
 
 Severity enforces the testing policy independently of Burp's confidence label.
-An assessment at or above the configured WAF threshold is published as
-**High**, with remediation directing the operator to stop active testing and
+An assessment at or above the configured WAF threshold raises a **High**
+concern, with remediation directing the operator to stop active testing and
 confirm that the target is approved under the no-WAF policy. A below-threshold
-no-indicators assessment remains **Information**.
+assessment does not raise a concern.
 
 Historical determination issues remain **Information** even if their recorded
-verdict was WAF suspected. This prevents an old High issue from appearing to be
-the current policy decision after a successful downgrade.
+verdict was WAF suspected. The determination is the authoritative timestamped
+status record for that active batch.
 
 ## Provider and action separation
 

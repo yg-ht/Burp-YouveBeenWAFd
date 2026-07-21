@@ -35,7 +35,7 @@ class WafScanIssueTests(unittest.TestCase):
 
         self.assertIs(issue.getUrl(), url)
         self.assertIs(issue.getHttpService(), service)
-        self.assertEqual(issue.getIssueName(), "WAF Detector: current assessment")
+        self.assertEqual(issue.getIssueName(), "WAF Detector: WAF suspected")
         self.assertEqual(issue.getIssueType(), 0)
         self.assertEqual(issue.getSeverity(), "Information")
         self.assertEqual(issue.getConfidence(), "Firm")
@@ -48,10 +48,10 @@ class WafScanIssueTests(unittest.TestCase):
     def test_issue_name_and_private_type_can_identify_historical_records(self):
         issue = WafScanIssue(
             object(), object(), "detail", "remediation", "Information",
-            "Firm", [], name="WAF Detector: active determination",
+            "Firm", [], name="WAF Detector: probe determination",
             issue_type=7)
 
-        self.assertEqual(issue.getIssueName(), "WAF Detector: active determination")
+        self.assertEqual(issue.getIssueName(), "WAF Detector: probe determination")
         self.assertEqual(issue.getIssueType(), 7)
 
 

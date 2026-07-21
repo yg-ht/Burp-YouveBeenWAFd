@@ -6,7 +6,7 @@
 | --- | --- |
 | `BurpExtender.py` | Minimal legacy Burp entry point. |
 | `wafd/extension.py` | Burp callbacks, Swing UI, passive listener, active adapter, context menu, and issues. |
-| `wafd/burp_issue.py` | Legacy `IScanIssue`-compatible current-assessment object. |
+| `wafd/burp_issue.py` | Legacy `IScanIssue`-compatible concern and audit object. |
 | `wafd/config.py` | Versioned extension settings and size/request validation. |
 | `wafd/overrides.py` | Versioned persistent rule/probe enablement overrides. |
 | `wafd/probes.py` | Schema-version-1/2 loading, matrix expansion, and request selection. |
@@ -34,7 +34,7 @@ Burp HTTP response
   -> bounded and redacted fingerprint
   -> enabled response rules
   -> per-origin evidence
-  -> replaceable current-assessment issue
+  -> one threshold-triggered concern per origin
 ```
 
 ### Active
@@ -48,7 +48,7 @@ Scanner insertion point or context-menu action
   -> bounded fingerprints or classified transport failure
   -> zero-weight outcome plus differential/vendor rules
   -> transactional evidence keyed by rule and concrete probe
-  -> one immutable active determination plus one current-assessment update
+  -> one immutable probe determination plus an optional first concern
 ```
 
 ## Trust boundaries and defensive behaviour
@@ -144,21 +144,24 @@ Before release, manually verify:
    `Content-Length` are correct on the wire.
 11. HTTP/1.1 and HTTP/2 responses retain a usable version field.
 12. Timeout/reset behaviour is represented as Burp exposes it on the platform.
-13. One current issue remains after a large active matrix.
+13. One determination contains the complete successful batch message set, and
+    at most one concern exists for the origin.
 14. A failed active transport does not clear response-based qualities that
     could not be re-evaluated, while connection-state qualities still update.
-15. Passive responses with no matching qualities advance the current issue's
-    latest-check timestamp, including after state restoration.
+15. Passive responses below threshold do not raise issues; an inclusive
+    threshold match raises exactly one concern.
 
 ## Known limitations
 
 - Rule weights and the default 60% threshold require validation against
   confirmed customer deployments; the tracked TODO defines the test programme.
 - The project uses the legacy Extender API and Jython 2.7 rather than Montoya.
-- Current assessment metadata is recovered from its bounded versioned Burp
-  issue state after reload. Complete representative HTTP messages are not
-  serialised by the extension; the next observation supplies the current
-  representative message.
+- Assessment metadata is recovered from the newest valid bounded state marker
+  in a per-origin passive-state setting, determination, concern, or legacy
+  current-assessment issue after reload. Passive settings are created only
+  after a concern exists. HTTP message objects are attached to determinations
+  but are not serialised inside the marker; the next observation supplies the
+  current representative.
 - Provider filtering exists in the planner API; the UI exposes provider data
   through its general catalogue text filter rather than a dedicated dropdown.
 - Expected-response fields in probe profiles are documentation; shared rules,

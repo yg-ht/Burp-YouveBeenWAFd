@@ -116,6 +116,26 @@ class AssessmentTests(unittest.TestCase):
         self.assertIn("Recent active determinations", detail)
         self.assertIn(store.STATE_PREFIX, detail)
 
+    def test_concern_detail_omits_audit_history_while_determination_persists_state(self):
+        store = AssessmentStore([Rule("r", "Rule", "g", 60)],
+                                clock=lambda: "unused")
+        unused_assessment, determination = store.reconcile_active(
+            "https://x", ["probe"], [
+                Evidence("r", "https://x", "matched", source="active",
+                         characteristic="probe",
+                         observed_at="2026-01-01T00:00:30Z")],
+            started_at="2026-01-01T00:00:00Z",
+            completed_at="2026-01-01T00:01:00Z")
+
+        unused_message, score, concern = store.concern_issue_snapshot("https://x")
+        determination_detail = store.determination_detail(
+            "https://x", determination)
+
+        self.assertEqual(score, 0.60)
+        self.assertNotIn("Recent active determinations", concern)
+        self.assertIn(store.STATE_PREFIX, concern)
+        self.assertIn(store.STATE_PREFIX, determination_detail)
+
     def test_versioned_state_round_trip_restores_current_and_history(self):
         rules = [Rule("passive", "Passive", "p", 20),
                  Rule("active", "Active", "a", 60)]
