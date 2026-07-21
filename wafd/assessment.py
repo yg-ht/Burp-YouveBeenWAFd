@@ -277,7 +277,7 @@ class AssessmentStore(object):
         }
 
     def state_marker(self, origin):
-        """Return bounded versioned state metadata for the current Burp issue."""
+        """Return bounded versioned state metadata for persistent Burp issues."""
         with self._lock:
             return self._state_marker(origin)
 
@@ -555,10 +555,10 @@ class AssessmentStore(object):
         return label
 
     def determination_detail(self, origin, determination):
-        """Render one immutable active determination as escaped HTML."""
+        """Render one immutable probe determination as escaped HTML."""
         state = "WAF suspected" if determination.suspected else "No WAF indicators detected"
         lines = [
-            "<p><b>Historical active determination</b></p>",
+            "<p><b>Historical probe determination</b></p>",
             "<p>Origin: %s<br>Started: %s<br>Completed: %s</p>" % (
                 html_escape(str(origin), quote=True),
                 html_escape(str(determination.started_at), quote=True),
@@ -611,13 +611,16 @@ class AssessmentStore(object):
         lines.append("<p>Current qualities producing this result: %s</p>" % (
             ", ".join(html_escape(value, quote=True) for value in current)
             if current else "None"))
+        state_marker = self.state_marker(origin)
+        if state_marker:
+            lines.append(state_marker)
         return "".join(lines)
 
     def detail(self, origin):
         with self._lock:
             return self._detail(origin)
 
-    def _detail(self, origin):
+    def _detail(self, origin, include_history=True, include_state=True):
         assessment = self.assessments.get(origin, OriginAssessment(origin))
         score, products = self.engine.score(assessment.evidence)
         product_names = sorted(products, key=lambda product: products[product], reverse=True)
@@ -677,7 +680,7 @@ class AssessmentStore(object):
             lines.append("<p>Qualities cleared by the latest re-check:</p><ul>%s</ul>" %
                          "".join(cleared))
 
-        if assessment.determinations:
+        if include_history and assessment.determinations:
             summaries = []
             for determination in reversed(assessment.determinations):
                 verdict = "WAF suspected" if determination.suspected else "No WAF indicators"
@@ -697,9 +700,10 @@ class AssessmentStore(object):
             for item in assessment.evidence),
                             separators=(",", ":"))
         lines.append("<p>Evidence IDs: %s</p>" % html_escape(marker, quote=True))
-        state_marker = self.state_marker(origin)
-        if state_marker:
-            lines.append(state_marker)
+        if include_state:
+            state_marker = self.state_marker(origin)
+            if state_marker:
+                lines.append(state_marker)
         return "".join(lines)
 
     def current_issue_snapshot(self, origin):
@@ -708,3 +712,12 @@ class AssessmentStore(object):
             assessment = self.assessments[origin]
             score = self.engine.score(assessment.evidence)[0]
             return assessment.representative_message, score, self._detail(origin)
+
+    def concern_issue_snapshot(self, origin):
+        """Return a focused threshold concern without duplicating audit history."""
+        with self._lock:
+            assessment = self.assessments[origin]
+            score = self.engine.score(assessment.evidence)[0]
+            detail = (self._detail(origin, include_history=False)
+                      if score >= self.engine.threshold else None)
+            return assessment.representative_message, score, detail

@@ -8,11 +8,11 @@ except ImportError:  # CPython test environment has no Burp Java API.
 
 
 class WafScanIssue(IScanIssue):
-    """Expose one current assessment through Burp's legacy issue interface."""
+    """Expose one WAF concern or audit record through Burp's legacy interface."""
 
     def __init__(self, url, http_service, detail, remediation, severity,
                  confidence, messages,
-                 name="WAF Detector: current assessment", issue_type=0):
+                 name="WAF Detector: WAF suspected", issue_type=0):
         self._url = url
         self._http_service = http_service
         self._detail = detail
